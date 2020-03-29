@@ -74,9 +74,54 @@ def getDInteractions(dataframe, start_time, end_time, proximity):
                 
         start_window = start_window + pd.Timedelta(seconds = nseconds)
         
-    maxW = max(list(counter.values()))
+    #maxW = max(list(counter.values()))
     
     #counter = counter/count
+    return {key: value for key, value in counter.items()}
+
+def getDInteractions_all(dataframe, start_time, end_time, proximity):
+    ids = dataframe.id.unique()
+    nids = len(ids)
+    counter = {}
+    nseconds = 1
+    start_window = pd.Timestamp(start_time)
+    
+    for id1 in ids:
+        for id2 in ids:
+            if id1 != id2:
+                counter[(id1,id2)] = 0
+
+    while start_window <= pd.Timestamp(end_time):
+        position = dataframe[str(start_window)].set_index("id").reindex(ids).reset_index()
+        dists = distance.cdist(position[['x','y']], position[['x','y']], 'euclidean')
+        
+        #distances < proximity -> add 1 to that relationship
+        dists = (np.array(dists) <= proximity) + 0
+        xs, ys = np.where(dists > 0)
+        for i in range(len(xs)):
+            if xs[i] == ys[i]:
+                continue
+            vel1E = float(position.loc[position['id'] == ids[xs[i]]].velE)
+            vel1N = float(position.loc[position['id'] == ids[xs[i]]].velN)
+            
+            vx = float(position.loc[position['id'] == ids[ys[i]]].x) - float(position.loc[position['id'] == ids[xs[i]]].x)
+            vy = float(position.loc[position['id'] == ids[ys[i]]].y) - float(position.loc[position['id'] == ids[xs[i]]].y)
+            
+            cosine = 0
+            
+            if (vel1E * vx + vel1N * vy) != 0:
+                cosine = (vel1E * vx + vel1N * vy)/(math.sqrt(vel1E**2 + vel1N**2) * math.sqrt(vx**2 + vy**2))
+            
+            if cosine >= 0:
+                counter[(ids[xs[i]], ids[ys[i]])] += 1
+
+                
+        start_window = start_window + pd.Timedelta(seconds = nseconds)
+        
+    #maxW = max(list(counter.values()))
+    
+    #counter = counter/count
+    
     return {key: value for key, value in counter.items()}
 
 def getWEdges(counter):
