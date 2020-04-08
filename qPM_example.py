@@ -72,12 +72,26 @@ transactionsTo = setMultiToAttEdges(GTo, socialData, attributes)
 
 compTQ = treeQuality(GComp,freqItemsets(transactionsComp, 10), qPM)
 compTQ.sort(reverse=True)
-infoPats(compTQ).to_csv('output/Comp_qPM.csv', index=True)
+infoPats(compTQ).to_csv('output/Comp_qPM_mean.csv', index=True)
 
 compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 10), qPM)
 compFrom.sort(reverse=True)
-infoPats(compFrom).to_csv('output/From_qPM.csv', index=True)
+infoPats(compFrom).to_csv('output/From_qPM_mean.csv', index=True)
 
 compTo = treeQuality(GTo,freqItemsets(transactionsTo, 10), qPM)
 compTo.sort(reverse=True)
-infoPats(compTo).to_csv('output/To_qPM.csv', index=True)
+infoPats(compTo).to_csv('output/To_qPM_mean.csv', index=True)
+
+# using variance as metric
+
+compTQ = treeQuality(GComp,freqItemsets(transactionsComp, 10), qPM, 'var')
+compTQ.sort(reverse=True)
+infoPats(compTQ).to_csv('output/Comp_qPM_var.csv', index=True)
+
+compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 10), qPM, 'var')
+compFrom.sort(reverse=True)
+infoPats(compFrom).to_csv('output/From_qPM_var.csv', index=True)
+
+compTo = treeQuality(GTo,freqItemsets(transactionsTo, 10), qPM, 'var')
+compTo.sort(reverse=True)
+infoPats(compTo).to_csv('output/To_qPM_var.csv', index=True)

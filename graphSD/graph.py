@@ -280,11 +280,12 @@ def setCompAttEdges(graph, dataframe, attributes, GL = None):
             else:
                 eattr[att] = "<"
             tr.append(NominalSelector(att, eattr[att]))
-
-        if GL != None and GL.has_edge(nid1,nid2):
-            eattr['weight'] = 1
-        else:
-            eattr['weight'] = 0
+        
+        if GL != None:
+            if GL.has_edge(nid1,nid2):
+                eattr['weight'] = 1
+            else:
+                eattr['weight'] = 0
             
         attr[e] = eattr
         transactions.append(tr)
@@ -330,10 +331,11 @@ def setToAttEdges(graph, dataframe, attributes, GL = None):
         attr[e] = eattr
         transactions.append(tr)
 
-        if GL != None and GL.has_edge(nid1,nid2):
-            eattr['weight'] = 1
-        else:
-            eattr['weight'] = 0    
+        if GL != None:
+            if GL.has_edge(nid1,nid2):
+                eattr['weight'] = 1
+            else:
+                eattr['weight'] = 0    
 
     nx.set_edge_attributes(graph, attr)
     return transactions
@@ -362,10 +364,11 @@ def setMultiCompAttEdges(G, demogdata, attributes, GL = None):
                 edict[att] = "<"
             tr.append(NominalSelector(att, edict[att]))
 
-        if GL != None and GL.has_edge(nid1,nid2):
-            edict['weight'] = 1
-        else:
-            edict['weight'] = 0
+        if GL != None:
+            if GL.has_edge(nid1,nid2):
+                edict['weight'] = 1
+            else:
+                edict['weight'] = 0
             
         #attr[e] = eattr
         transactions.append(tr)
@@ -393,10 +396,11 @@ def setMultiFromAttEdges(G, demogdata, attributes, GL = None):
         transactions.append(tr)
         i += 1
                 
-        if GL != None and GL.has_edge(nid1,nid2):
-            edict['weight'] = 1
-        else:
-            edict['weight'] = 0
+        if GL != None:
+            if GL.has_edge(nid1,nid2):
+                edict['weight'] = 1
+            else:
+                edict['weight'] = 0
 
     #nx.set_edge_attributes(G, attr)
     return transactions
@@ -420,10 +424,11 @@ def setMultiToAttEdges(G, demogdata, attributes, GL = None):
         transactions.append(tr)
         i += 1
 
-        if GL != None and GL.has_edge(nid1,nid2):
-            edict['weight'] = 1
-        else:
-            edict['weight'] = 0
+        if GL != None:
+            if GL.has_edge(nid1,nid2):
+                edict['weight'] = 1
+            else:
+                edict['weight'] = 0
 
     #nx.set_edge_attributes(G, attr)
     return transactions
