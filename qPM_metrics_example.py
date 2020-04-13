@@ -85,20 +85,20 @@ socialData['pagerank'] = getBins(3,list(pagerank.values())).copy()
 
 attributes = ["Gender", "Age_P", "hubs", "auths", "degC", "outDeg", "inDeg", "eigC", "closeness", "betweeness", "pagerank"]
 
-transactionsComp = setMultiCompAttEdges(GComp, socialData, attributes)
-transactionsFrom = setMultiFromAttEdges(GFrom, socialData, attributes)
-transactionsTo = setMultiToAttEdges(GTo, socialData, attributes)
+transactionsComp = setMultiCompAttDiEdges(GComp, socialData, attributes)
+transactionsFrom = setMultiFromAttDiEdges(GFrom, socialData, attributes)
+transactionsTo = setMultiToAttDiEdges(GTo, socialData, attributes)
 
 #### Subgroup Discovery
 
-compTQ = treeQuality(GComp,freqItemsets(transactionsComp, 10), qPM)
+compTQ = treeQuality(GComp,freqItemsets(transactionsComp, 10), qP)
 compTQ.sort(reverse=True)
 infoPats(compTQ).to_csv('output/Comp_qPM.csv', index=True)
 
-compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 10), qPM)
+compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 10), qP)
 compFrom.sort(reverse=True)
 infoPats(compFrom).to_csv('output/From_qPM.csv', index=True)
 
-compTo = treeQuality(GTo,freqItemsets(transactionsTo, 10), qPM)
+compTo = treeQuality(GTo,freqItemsets(transactionsTo, 10), qP)
 compTo.sort(reverse=True)
 infoPats(compTo).to_csv('output/To_qPM.csv', index=True)

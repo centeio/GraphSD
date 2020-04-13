@@ -64,34 +64,34 @@ socialData['Hyper_z_P'] = getBins(3,list(socialData.Hyper_z))
 
 attributes = ['Gender', 'Age_P', 'ProSoc_z_P', 'Conduct_z_P', 'Emotion_z_P', 'Peer_z_P', 'Hyper_z_P']
 
-transactionsComp = setMultiCompAttEdges(GComp, socialData, attributes)
-transactionsFrom = setMultiFromAttEdges(GFrom, socialData, attributes)
-transactionsTo = setMultiToAttEdges(GTo, socialData, attributes)
+transactionsComp = setMultiCompAttDiEdges(GComp, socialData, attributes)
+transactionsFrom = setMultiFromAttDiEdges(GFrom, socialData, attributes)
+transactionsTo = setMultiToAttDiEdges(GTo, socialData, attributes)
 
 #### Subgroup Discovery
 
-compTQ = treeQuality(GComp,freqItemsets(transactionsComp, 10), qSM)
+compTQ = treeQuality(GComp,freqItemsets(transactionsComp, 10), qS)
 compTQ.sort(reverse=True)
 infoPats(compTQ).to_csv('output/Comp_qSM_mean.csv', index=True)
 
-compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 10), qSM)
+compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 10), qS)
 compFrom.sort(reverse=True)
 infoPats(compFrom).to_csv('output/From_qSM_mean.csv', index=True)
 
-compTo = treeQuality(GTo,freqItemsets(transactionsTo, 10), qSM)
+compTo = treeQuality(GTo,freqItemsets(transactionsTo, 10), qS)
 compTo.sort(reverse=True)
 infoPats(compTo).to_csv('output/To_qSM_mean.csv', index=True)
 
 # using variance as metric
 
-compTQ = treeQuality(GComp,freqItemsets(transactionsComp, 10), qSM, 'var')
+compTQ = treeQuality(GComp,freqItemsets(transactionsComp, 10), qS, 'var')
 compTQ.sort(reverse=True)
 infoPats(compTQ).to_csv('output/Comp_qSM_var.csv', index=True)
 
-compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 10), qSM, 'var')
+compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 10), qS, 'var')
 compFrom.sort(reverse=True)
 infoPats(compFrom).to_csv('output/From_qSM_var.csv', index=True)
 
-compTo = treeQuality(GTo,freqItemsets(transactionsTo, 10), qSM, 'var')
+compTo = treeQuality(GTo,freqItemsets(transactionsTo, 10), qS, 'var')
 compTo.sort(reverse=True)
 infoPats(compTo).to_csv('output/To_qSM_var.csv', index=True)

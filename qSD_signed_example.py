@@ -84,21 +84,21 @@ for n in list(GLikes.nodes()):
 
 attributes = ['Gender', 'Age_P', 'ProSoc_z_P', 'Conduct_z_P', 'Emotion_z_P', 'Peer_z_P', 'Hyper_z_P']
 
-transactionsComp = setCompAttEdges(GComp, socialData, attributes, GLikes)
-transactionsFrom = setFromAttEdges(GFrom, socialData, attributes, GLikes)
-transactionsTo = setToAttEdges(GTo, socialData, attributes, GLikes)
+transactionsComp = setCompAttDiEdges(GComp, socialData, attributes, GLikes)
+transactionsFrom = setFromAttDiEdges(GFrom, socialData, attributes, GLikes)
+transactionsTo = setToAttDiEdges(GTo, socialData, attributes, GLikes)
 
 #### Subgroup Discovery
 
-compTQ = treeQuality(GComp,freqItemsets(transactionsComp, 10), qSD)
+compTQ = treeQuality(GComp,freqItemsets(transactionsComp, 10), qS)
 compTQ.sort(reverse=True)
 infoPats(compTQ).to_csv('output/Comp_Signed_qSD.csv', index=True)
 
-compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 10), qSD)
+compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 10), qS)
 compFrom.sort(reverse=True)
 infoPats(compFrom).to_csv('output/From_Signed_qSD.csv', index=True)
 
-compTo = treeQuality(GTo,freqItemsets(transactionsTo, 10), qSD)
+compTo = treeQuality(GTo,freqItemsets(transactionsTo, 10), qS)
 compTo.sort(reverse=True)
 infoPats(compTo).to_csv('output/To_Signed_qSD.csv', index=True)
 

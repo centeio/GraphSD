@@ -66,34 +66,35 @@ socialData['Hyper_z_P'] = getBins(3,list(socialData.Hyper_z))
 
 attributes = ['Gender', 'Age_P', 'ProSoc_z_P', 'Conduct_z_P', 'Emotion_z_P', 'Peer_z_P', 'Hyper_z_P']
 
-transactionsComp = setCompAttEdges(GComp, socialData, attributes)
-transactionsFrom = setFromAttEdges(GFrom, socialData, attributes)
-transactionsTo = setToAttEdges(GTo, socialData, attributes)
+transactionsComp = setCompAttDiEdges(GComp, socialData, attributes)
+transactionsFrom = setFromAttDiEdges(GFrom, socialData, attributes)
+transactionsTo = setToAttDiEdges(GTo, socialData, attributes)
+
 #### Subgroup Discovery
 
-compTQ = treeQuality(GComp,freqItemsets(transactionsComp, 10), qSD)
+compTQ = treeQuality(GComp,freqItemsets(transactionsComp, 10), qS)
 compTQ.sort(reverse=True)
 infoPats(compTQ).to_csv('output/Comp_qSD_mean.csv', index=True)
 
-compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 10), qSD)
+compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 10), qS)
 compFrom.sort(reverse=True)
 infoPats(compFrom).to_csv('output/From_qSD_mean.csv', index=True)
 
-compTo = treeQuality(GTo,freqItemsets(transactionsTo, 10), qSD)
+compTo = treeQuality(GTo,freqItemsets(transactionsTo, 10), qS)
 compTo.sort(reverse=True)
 infoPats(compTo).to_csv('output/To_qSD_mean.csv', index=True)
 
 # Using variance as metric
 
-compTQ = treeQuality(GComp,freqItemsets(transactionsComp, 10), qSD, metric = 'var')
+compTQ = treeQuality(GComp,freqItemsets(transactionsComp, 10), qS, metric = 'var')
 compTQ.sort(reverse=True)
 infoPats(compTQ).to_csv('output/Comp_qSD_var.csv', index=True)
 
-compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 10), qSD, metric = 'var')
+compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 10), qS, metric = 'var')
 compFrom.sort(reverse=True)
 infoPats(compFrom).to_csv('output/From_qSD_var.csv', index=True)
 
-compTo = treeQuality(GTo,freqItemsets(transactionsTo, 10), qSD, metric = 'var')
+compTo = treeQuality(GTo,freqItemsets(transactionsTo, 10), qS, metric = 'var')
 compTo.sort(reverse=True)
 infoPats(compTo).to_csv('output/To_qSD_var.csv', index=True)
 

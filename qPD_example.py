@@ -30,7 +30,7 @@ cleandf = cleandf[cleandf['id'].isin(list(socialData['id']))]
 #### gather interactions
 
 initialDate = '2016-10-10 11:50:01'
-finalDate = '2016-10-10 12:00:06'
+finalDate = '2016-10-10 11:51:06'
 
 counter = getDInteractions_all(cleandf, initialDate, finalDate, 1)
 
@@ -66,35 +66,35 @@ socialData['Hyper_z_P'] = getBins(3,list(socialData.Hyper_z))
 
 attributes = ['Gender', 'Age_P', 'ProSoc_z_P', 'Conduct_z_P', 'Emotion_z_P', 'Peer_z_P', 'Hyper_z_P']
 
-transactionsComp = setCompAttEdges(GComp, socialData, attributes)
-transactionsFrom = setFromAttEdges(GTo, socialData, attributes)
-transactionsTo = setToAttEdges(GFrom, socialData, attributes)
+transactionsComp = setCompAttDiEdges(GComp, socialData, attributes)
+transactionsFrom = setFromAttDiEdges(GTo, socialData, attributes)
+transactionsTo = setToAttDiEdges(GFrom, socialData, attributes)
 
 #### Subgroup Discovery
 
-compTQ = treeQuality(GComp,freqItemsets(transactionsComp, 10), qPD)
+compTQ = treeQuality(GComp,freqItemsets(transactionsComp, 10), qP)
 compTQ.sort(reverse=True)
 infoPats(compTQ).to_csv('output/Comp_qPD_mean.csv', index=True)
 
-compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 10), qPD)
+compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 10), qP)
 compFrom.sort(reverse=True)
 infoPats(compFrom).to_csv('output/From_qPD_mean.csv', index=True)
 
-compTo = treeQuality(GTo,freqItemsets(transactionsTo, 10), qPD)
+compTo = treeQuality(GTo,freqItemsets(transactionsTo, 10), qP)
 compTo.sort(reverse=True)
 infoPats(compTo).to_csv('output/To_qPD_mean.csv', index=True)
 
 # Using variance as metric
 
-compTQ = treeQuality(GComp,freqItemsets(transactionsComp, 10), qPD, metric = 'var')
+compTQ = treeQuality(GComp,freqItemsets(transactionsComp, 10), qP, metric = 'var')
 compTQ.sort(reverse=True)
 infoPats(compTQ).to_csv('output/Comp_qPD_var.csv', index=True)
 
-compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 10), qPD, metric = 'var')
+compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 10), qP, metric = 'var')
 compFrom.sort(reverse=True)
 infoPats(compFrom).to_csv('output/From_qPD_var.csv', index=True)
 
-compTo = treeQuality(GTo,freqItemsets(transactionsTo, 10), qPD, metric = 'var')
+compTo = treeQuality(GTo,freqItemsets(transactionsTo, 10), qP, metric = 'var')
 compTo.sort(reverse=True)
 infoPats(compTo).to_csv('output/To_qPD_var.csv', index=True)
 

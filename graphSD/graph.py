@@ -237,6 +237,15 @@ def getWEdges(counter):
     
     return gedges
 
+def createGraph(counter, ids):
+    # counter must be of type tuple (e1, e2, w)
+
+    graph = nx.Graph()
+    graph.add_nodes_from(ids)
+    graph.add_weighted_edges_from(counter)
+
+    return graph
+
 def createDiGraph(counter, ids):
     graph = nx.DiGraph()
     graph.add_nodes_from(ids)
@@ -275,6 +284,36 @@ def setCompAttEdges(graph, dataframe, attributes, GL = None):
                 eattr[att] = str((dataframe[dataframe.id == nid1][att].item(), dataframe[dataframe.id == nid2][att].item()))
             elif dataframe[dataframe.id == nid1][att].item() == dataframe[dataframe.id == nid2][att].item():
                 eattr[att] = "EQ"
+            else:
+                eattr[att] = "NEQ"
+            tr.append(NominalSelector(att, eattr[att]))
+        
+        if GL != None:
+            if GL.has_edge(nid1,nid2):
+                eattr['weight'] = 1
+            else:
+                eattr['weight'] = 0
+            
+        attr[e] = eattr
+        transactions.append(tr)
+                
+    nx.set_edge_attributes(graph, attr)
+    return transactions
+
+
+def setCompAttDiEdges(graph, dataframe, attributes, GL = None):
+    attr = {}
+    transactions = []
+    tr = []
+    for e in list(graph.edges()):
+        tr = []
+        nid1, nid2 = e
+        eattr = {}
+        for att in attributes:
+            if att == "Gender":
+                eattr[att] = str((dataframe[dataframe.id == nid1][att].item(), dataframe[dataframe.id == nid2][att].item()))
+            elif dataframe[dataframe.id == nid1][att].item() == dataframe[dataframe.id == nid2][att].item():
+                eattr[att] = "EQ"
             elif dataframe[dataframe.id == nid1][att].item() > dataframe[dataframe.id == nid2][att].item():
                 eattr[att] = ">"
             else:
@@ -291,9 +330,11 @@ def setCompAttEdges(graph, dataframe, attributes, GL = None):
         transactions.append(tr)
                 
     nx.set_edge_attributes(graph, attr)
+
     return transactions
 
-def setFromAttEdges(graph, dataframe, attributes, GL = None):
+def setFromAttDiEdges(graph, dataframe, attributes, GL = None):
+
     attr = {}
     transactions = []
     tr = []
@@ -308,15 +349,17 @@ def setFromAttEdges(graph, dataframe, attributes, GL = None):
         attr[e] = eattr
         transactions.append(tr)
                 
-        if GL != None and GL.has_edge(nid1,nid2):
-            eattr['weight'] = 1
-        else:
-            eattr['weight'] = 0
+        if GL != None:
+            if GL.has_edge(nid1,nid2):
+                eattr['weight'] = 1
+            else:
+                eattr['weight'] = 0
 
     nx.set_edge_attributes(graph, attr)
+
     return transactions
 
-def setToAttEdges(graph, dataframe, attributes, GL = None):
+def setToAttDiEdges(graph, dataframe, attributes, GL = None):
     attr = {}
     transactions = []
     tr = []
@@ -340,7 +383,7 @@ def setToAttEdges(graph, dataframe, attributes, GL = None):
     nx.set_edge_attributes(graph, attr)
     return transactions
 
-def setMultiCompAttEdges(G, demogdata, attributes, GL = None):
+def setMultiCompAttDiEdges(G, demogdata, attributes, GL = None):
     attr = {}
     transactions = []
     tr = []
@@ -377,7 +420,7 @@ def setMultiCompAttEdges(G, demogdata, attributes, GL = None):
     #nx.set_edge_attributes(G, attr)
     return transactions
 
-def setMultiFromAttEdges(G, demogdata, attributes, GL = None):
+def setMultiFromAttDiEdges(G, demogdata, attributes, GL = None):
     attr = {}
     transactions = []
     tr = []
@@ -405,7 +448,7 @@ def setMultiFromAttEdges(G, demogdata, attributes, GL = None):
     #nx.set_edge_attributes(G, attr)
     return transactions
 
-def setMultiToAttEdges(G, demogdata, attributes, GL = None):
+def setMultiToAttDiEdges(G, demogdata, attributes, GL = None):
     attr = {}
     transactions = []
     tr = []

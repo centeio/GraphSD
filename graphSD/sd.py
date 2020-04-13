@@ -52,24 +52,36 @@ def qSaux(G, edges, multi, metric = 'mean'):
     return w
 
 
-def qSD(G, P, nsamples, metric = 'mean'):    
+def qS(G, P, nsamples, metric = 'mean'):    
     edges = edgesOfP(G, P)
-    Gpattern = nx.DiGraph()
-    Gpattern.add_edges_from(edges)
-
-    w = qSaux(G, edges, False, metric)
-
-    pat = Pattern(P, Gpattern, w)
-    
+    multi = False
     totalE = round((len(list(G.nodes())) * (len(list(G.nodes())) - 1)))
 
+    if type(G) == nx.Graph:
+        Gpattern = nx.Graph()
+    elif type(G) == nx.DiGraph:
+        Gpattern = nx.DiGraph()
+    elif type(G) == nx.MultiGraph:
+        Gpattern = nx.MultiGraph()
+        multi = True
+        totalE += m(G, G.nodes)
+    elif type(G) == nx.MultiDiGraph:
+        Gpattern = nx.MultiDiGraph()
+        multi = True
+        totalE += m(G, G.nodes)
+
+    Gpattern.add_edges_from(edges)
+
+    w = qSaux(G, edges, multi, metric)
+
+    pat = Pattern(P, Gpattern, w)
     
     sample = []
     
     for r in range(nsamples):
-        indxs = np.random.choice(range(totalE), len(list(pat.graph.edges())), replace = False) 
+        indxs = np.random.choice(range(totalE), len(edges), replace = False) 
         randomE = [list(G.edges(data = True))[i] for i in indxs if i < len(list(G.edges()))]
-        tempres, tempnE, tempnEp, nodestemp = qSDaux(randomE)
+        tempres = qSaux(G, randomE, multi, metric)
         sample = np.append(sample, [tempres])
         
     mean = np.mean(sample)
@@ -77,7 +89,9 @@ def qSD(G, P, nsamples, metric = 'mean'):
     std = np.std(sample)
     #print('std ',std)
     
+    #print(sample, mean, std)
     pat.quality = (pat.weight - mean)/std
+
     return pat
 
 
@@ -91,9 +105,21 @@ def qPaux(edges, metric = 'mean'):
     return w
 
 
-def qPD(G, P, nsamples, metric = 'mean'):    
+def qP(G, P, nsamples, metric = 'mean'):    
     edges = edgesOfP(G, P)
-    Gpattern = nx.DiGraph()
+    multi = False
+
+    if type(G) == nx.Graph:
+        Gpattern = nx.Graph()
+    elif type(G) == nx.DiGraph:
+        Gpattern = nx.DiGraph()
+    elif type(G) == nx.MultiGraph:
+        Gpattern = nx.MultiGraph()
+        multi = True
+    elif type(G) == nx.MultiDiGraph:
+        Gpattern = nx.MultiDiGraph()
+        multi = True
+
     Gpattern.add_edges_from(edges)
 
     w = qPaux(edges, metric)
@@ -113,7 +139,7 @@ def qPD(G, P, nsamples, metric = 'mean'):
     for r in range(nsamples):
         indxs = np.random.choice(range(len(list(G.edges()))), len(list(pat.graph.edges())), replace = False) 
         randomE = [list(G.edges(data = True))[i] for i in indxs]
-        tempres = qPaux(randomE)
+        tempres = qPaux(randomE, metric)
         sample = np.append(sample, [tempres])
         
     mean = np.mean(sample)
@@ -124,78 +150,6 @@ def qPD(G, P, nsamples, metric = 'mean'):
     pat.quality = (pat.weight - mean)/std
     
     return pat    
-
-
-def qSM(G, P, nsamples, metric = 'mean'):
-    edges = edgesOfP(G, P)
-    Gpattern = nx.MultiDiGraph()
-    Gpattern.add_edges_from(edges)
-    #print(edges)
-
-    w = qSaux(G = G, edges = edges, multi = True, metric = metric)
-
-    pat = Pattern(P, Gpattern, w)        
-    totalE = round((len(list(G.nodes())) * (len(list(G.nodes())) - 1)))
-    totalmE = m(G, G.nodes)
-
-    sample = []
-    
-    for r in range(nsamples):
-        indxs = np.random.choice(range(totalE + totalmE), len(edges), replace = False) 
-        randomE = [list(G.edges(data = True))[i] for i in indxs if i < len(list(G.edges()))]
-        sample = np.append(sample, [qSaux(G, randomE, True, metric)])
-        
-    mean = np.mean(sample)
-    #print('mean ',mean)
-    std = np.std(sample)
-    #print('std ',std)
-    
-    quality = (qres - mean)/std
-    
-    pat.quality = quality
-    
-    return pat
-
-
-def qPM(G, P, nsamples, metric = 'mean'):    
-    edges = edgesOfP(G, P)
-    Gpattern = nx.MultiDiGraph()
-    Gpattern.add_edges_from(edges)
-    #print(edges)
-
-    w = qPaux(edges, metric)
-    pat = Pattern(P, Gpattern, w)
-    
-    totalE = len(list(G.edges()))
-    #print(P)
-    #print(qres)
-    #print(nodes)
-    
-    sample = []
-    
-    #lst = [edict['weight'] for n1,n2,edict in list(G.edges(data=True))]
-    #mean = reduce(lambda a, b: a + b, lst) / len(lst) 
-    
-    #if mean > pat.weight:
-    #    return 0
-    
-    for r in range(nsamples):
-        indxs = np.random.choice(range(len(list(G.edges()))), len(list(pat.graph.edges())), replace = False) 
-        #print(indxs)
-        randomE = [list(G.edges(data = True))[i] for i in indxs]
-        #print(len(randomE))
-        tempres = qPaux(randomE)
-        #print(tempres)
-        sample = np.append(sample, [tempres])
-        
-    mean = np.mean(sample)
-    #print('mean ',mean)
-    std = np.std(sample)
-    #print('std ',std)
-    
-    pat.quality = (pat.weight - mean)/std
-    
-    return pat
 
 
 def treeQuality(G, nodes,q, metric = 'mean'):
