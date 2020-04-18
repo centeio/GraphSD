@@ -1,6 +1,9 @@
 import numpy as np
 import pandas as pd
 import networkx as nx
+import multiprocessing as mp
+from multiprocessing.dummy import Pool as ThreadPool
+
 
 from graphSD.graph import *
 
@@ -77,12 +80,18 @@ def qS(G, P, nsamples, metric = 'mean'):
     pat = Pattern(P, Gpattern, w)
     
     sample = []
+
+    pool = ThreadPool(2)
     
     for r in range(nsamples):
         indxs = np.random.choice(range(totalE), len(edges), replace = False) 
         randomE = [list(G.edges(data = True))[i] for i in indxs if i < len(list(G.edges()))]
-        tempres = qSaux(G, randomE, multi, metric)
-        sample = np.append(sample, [tempres])
+        #tempres = qSaux(G, randomE, multi, metric)
+        #sample = np.append(sample, [tempres])
+        pool.apply_async(qSaux, args=(G, randomE, multi, metric), callback=sample.append)
+
+    pool.close()
+    pool.join()
         
     mean = np.mean(sample)
     #print('mean ',mean)
@@ -135,12 +144,18 @@ def qP(G, P, nsamples, metric = 'mean'):
     # For only positive Z value
     #if mean > pat.weight:
     #    return 0
-    
+
+    pool = ThreadPool(2)
+
     for r in range(nsamples):
         indxs = np.random.choice(range(len(list(G.edges()))), len(list(pat.graph.edges())), replace = False) 
         randomE = [list(G.edges(data = True))[i] for i in indxs]
-        tempres = qPaux(randomE, metric)
-        sample = np.append(sample, [tempres])
+        #tempres = qPaux(randomE, metric)
+        #sample = np.append(sample, [tempres])
+        pool.apply_async(qPaux, args=(randomE, metric), callback=sample.append)
+
+    pool.close()
+    pool.join()
         
     mean = np.mean(sample)
     #print('mean ',mean)
@@ -152,12 +167,17 @@ def qP(G, P, nsamples, metric = 'mean'):
     return pat    
 
 
-def treeQuality(G, nodes,q, metric = 'mean'):
-    qs = []
-    for k, val in nodes.items(): 
-        patqs = q(G, k, 1000, metric)
-        if type(patqs) != int:
-            qs += [q(G, k, 1000)]
+def treeQuality(G, nodes, q, metric = 'mean', multiprocess = True):
+    if multiprocess:
+        pool = mp.Pool(mp.cpu_count())
+        qs = []
+        for k,_ in nodes.items():
+            pool.apply_async(q, args=(G, k, 1000, metric), callback=qs.append)
+        pool.close()
+        pool.join()
+    else:
+        qs = [q(G, k, 1000, metric) for k,_ in nodes.items()]
+
     return qs
 
 

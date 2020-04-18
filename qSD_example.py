@@ -10,98 +10,100 @@ from graphSD.sd import *
 
 np.random.seed(1234)
 
-socialData = pd.read_csv('./data/useme2.csv', dtype={'id':str})
+if __name__ ==  '__main__':
 
-cleandf = pd.read_csv('./data/cleandf.csv')
-cleandf = cleandf.rename(columns = {'Unnamed: 0':'date'})
-cleandf['id'] = cleandf['id'].astype(str)
+    socialData = pd.read_csv('./data/useme2.csv', dtype={'id':str})
 
-cleandf['date'] = pd.to_datetime(cleandf['date'])
+    cleandf = pd.read_csv('./data/cleandf.csv')
+    cleandf = cleandf.rename(columns = {'Unnamed: 0':'date'})
+    cleandf['id'] = cleandf['id'].astype(str)
 
-min_utc = cleandf.utc.min()
-#pd.to_datetime(min_utc,unit="ms") 
+    cleandf['date'] = pd.to_datetime(cleandf['date'])
 
-max_utc = cleandf.utc.max()
-ids = socialData['id']
+    min_utc = cleandf.utc.min()
+    #pd.to_datetime(min_utc,unit="ms") 
 
-cleandf.set_index('date', inplace=True)
-cleandf = cleandf[cleandf['id'].isin(list(socialData['id']))]
+    max_utc = cleandf.utc.max()
+    ids = socialData['id']
 
-#### gather interactions
+    cleandf.set_index('date', inplace=True)
+    cleandf = cleandf[cleandf['id'].isin(list(socialData['id']))]
 
-initialDate = '2016-10-10 11:50:01'
-finalDate = '2016-10-10 12:00:06'
+    #### gather interactions
 
-counter = getDInteractions(cleandf, initialDate, finalDate, 1)
+    initialDate = '2016-10-10 11:50:01'
+    finalDate = '2016-10-10 12:00:06'
 
-#### create graphs Comp, From and To
+    counter = getDInteractions(cleandf, initialDate, finalDate, 1)
 
-GComp = createDiGraph(counter, ids)
-GTo = createDiGraph(counter, ids)
-GFrom = createDiGraph(counter, ids)
+    #### create graphs Comp, From and To
 
-#### PREPARE DATA
+    GComp = createDiGraph(counter, ids)
+    GTo = createDiGraph(counter, ids)
+    GFrom = createDiGraph(counter, ids)
 
-ageMean = np.mean(socialData.AgeM)
-ageStd = np.std(socialData.AgeM)
-age_z = getZ(socialData.AgeM, ageMean, ageStd)
+    #### PREPARE DATA
 
-socialData['Age_P'] = getBins(3,list(age_z))
+    ageMean = np.mean(socialData.AgeM)
+    ageStd = np.std(socialData.AgeM)
+    age_z = getZ(socialData.AgeM, ageMean, ageStd)
 
-ProSocMean = np.mean(socialData.ProSoc_z)
-ProSocStd = np.std(socialData.ProSoc_z)
-ProSoc_z = getZ(socialData.ProSoc_z, ProSocMean, ProSocStd)
+    socialData['Age_P'] = getBins(3,list(age_z))
 
-socialData['ProSoc_z_P'] = getBins(3,list(socialData.ProSoc_z))
+    ProSocMean = np.mean(socialData.ProSoc_z)
+    ProSocStd = np.std(socialData.ProSoc_z)
+    ProSoc_z = getZ(socialData.ProSoc_z, ProSocMean, ProSocStd)
 
-socialData['Conduct_z_P'] = getBins(3,list(socialData.Conduct_z))
+    socialData['ProSoc_z_P'] = getBins(3,list(socialData.ProSoc_z))
 
-socialData['Emotion_z_P'] = getBins(3,list(socialData.Emotion_z))
+    socialData['Conduct_z_P'] = getBins(3,list(socialData.Conduct_z))
 
-socialData['Peer_z_P'] = getBins(3,list(socialData.Peer_z))
+    socialData['Emotion_z_P'] = getBins(3,list(socialData.Emotion_z))
 
-socialData['Hyper_z_P'] = getBins(3,list(socialData.Hyper_z))
+    socialData['Peer_z_P'] = getBins(3,list(socialData.Peer_z))
 
-#### give attributes to graphs
+    socialData['Hyper_z_P'] = getBins(3,list(socialData.Hyper_z))
 
-attributes = ['Gender', 'Age_P', 'ProSoc_z_P', 'Conduct_z_P', 'Emotion_z_P', 'Peer_z_P', 'Hyper_z_P']
+    #### give attributes to graphs
 
-transactionsComp = setCompAttDiEdges(GComp, socialData, attributes)
-transactionsFrom = setFromAttDiEdges(GFrom, socialData, attributes)
-transactionsTo = setToAttDiEdges(GTo, socialData, attributes)
+    attributes = ['Gender', 'Age_P', 'ProSoc_z_P', 'Conduct_z_P', 'Emotion_z_P', 'Peer_z_P', 'Hyper_z_P']
 
-#### Subgroup Discovery
+    transactionsComp = setCompAttDiEdges(GComp, socialData, attributes)
+    transactionsFrom = setFromAttDiEdges(GFrom, socialData, attributes)
+    transactionsTo = setToAttDiEdges(GTo, socialData, attributes)
 
-compTQ = treeQuality(GComp,freqItemsets(transactionsComp, 10), qS)
-compTQ.sort(reverse=True)
-infoPats(compTQ).to_csv('output/Comp_qSD_mean.csv', index=True)
+    #### Subgroup Discovery
 
-compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 10), qS)
-compFrom.sort(reverse=True)
-infoPats(compFrom).to_csv('output/From_qSD_mean.csv', index=True)
+    compTQ = treeQuality(GComp,freqItemsets(transactionsComp, 10), qS)
+    compTQ.sort(reverse=True)
+    infoPats(compTQ).to_csv('output/Comp_qSD_mean.csv', index=True)
 
-compTo = treeQuality(GTo,freqItemsets(transactionsTo, 10), qS)
-compTo.sort(reverse=True)
-infoPats(compTo).to_csv('output/To_qSD_mean.csv', index=True)
+    compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 10), qS)
+    compFrom.sort(reverse=True)
+    infoPats(compFrom).to_csv('output/From_qSD_mean.csv', index=True)
 
-# Using variance as metric
+    compTo = treeQuality(GTo,freqItemsets(transactionsTo, 10), qS)
+    compTo.sort(reverse=True)
+    infoPats(compTo).to_csv('output/To_qSD_mean.csv', index=True)
 
-compTQ = treeQuality(GComp,freqItemsets(transactionsComp, 10), qS, metric = 'var')
-compTQ.sort(reverse=True)
-infoPats(compTQ).to_csv('output/Comp_qSD_var.csv', index=True)
+    # Using variance as metric
 
-compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 10), qS, metric = 'var')
-compFrom.sort(reverse=True)
-infoPats(compFrom).to_csv('output/From_qSD_var.csv', index=True)
+    compTQ = treeQuality(GComp,freqItemsets(transactionsComp, 10), qS, metric = 'var')
+    compTQ.sort(reverse=True)
+    infoPats(compTQ).to_csv('output/Comp_qSD_var.csv', index=True)
 
-compTo = treeQuality(GTo,freqItemsets(transactionsTo, 10), qS, metric = 'var')
-compTo.sort(reverse=True)
-infoPats(compTo).to_csv('output/To_qSD_var.csv', index=True)
+    compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 10), qS, metric = 'var')
+    compFrom.sort(reverse=True)
+    infoPats(compFrom).to_csv('output/From_qSD_var.csv', index=True)
+
+    compTo = treeQuality(GTo,freqItemsets(transactionsTo, 10), qS, metric = 'var')
+    compTo.sort(reverse=True)
+    infoPats(compTo).to_csv('output/To_qSD_var.csv', index=True)
 
 
-#### visualize
+    #### visualize
 
-#displayGender(GComp,ids, socialData, filtere=4)
-#graphViz(compTQ[0].graph)
+    #displayGender(GComp,ids, socialData, filtere=4)
+    #graphViz(compTQ[0].graph)
 
-#TODO show example printpositions and printpositionsG
+    #TODO show example printpositions and printpositionsG

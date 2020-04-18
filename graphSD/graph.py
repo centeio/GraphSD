@@ -533,10 +533,11 @@ def infoPats(listOfPatterns):
     col_names =  ['Pattern', 'Nodes', 'in', 'out','Edges', 'Mean Weight', 'Score']
     my_df  = pd.DataFrame(columns = col_names)
     for p in listOfPatterns:
-        nnodes = len(list(p.graph.nodes()))
-        nedges = len(list(p.graph.edges()))
-        in_nodes = len([y for (x,y)  in list(p.graph.in_degree()) if y > 0])
-        out_nodes = len([y for (x,y)  in list(p.graph.out_degree()) if y > 0])
-        my_df = my_df.append({'Pattern': p.name, 'Nodes': nnodes, 'in': in_nodes, 'out': out_nodes, 'Edges': nedges, 'Mean Weight': round(p.weight,1),'Score': round(p.quality,1)}, ignore_index=True)
-            
+        if type(p) == Pattern :
+            nnodes = len(list(p.graph.nodes()))
+            nedges = len(list(p.graph.edges()))
+            in_nodes = len([y for (x,y)  in list(p.graph.in_degree()) if y > 0])
+            out_nodes = len([y for (x,y)  in list(p.graph.out_degree()) if y > 0])
+            my_df = my_df.append({'Pattern': p.name, 'Nodes': nnodes, 'in': in_nodes, 'out': out_nodes, 'Edges': nedges, 'Mean Weight': round(p.weight,1),'Score': round(p.quality,1)}, ignore_index=True)
+                
     return my_df
