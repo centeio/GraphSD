@@ -167,12 +167,12 @@ def qP(G, P, nsamples, metric = 'mean'):
     return pat    
 
 
-def treeQuality(G, nodes, q, metric = 'mean', multiprocess = True):
+def treeQuality(G, nodes, q, metric = 'mean', multiprocess = True, samples = 1000):
     if multiprocess:
         pool = mp.Pool(mp.cpu_count())
         qs = []
         for k,_ in nodes.items():
-            pool.apply_async(q, args=(G, k, 1000, metric), callback=qs.append)
+            pool.apply_async(q, args=(G, k, samples, metric), callback=qs.append)
         pool.close()
         pool.join()
     else:

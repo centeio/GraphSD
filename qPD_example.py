@@ -24,17 +24,23 @@ if __name__ ==  '__main__':
     #pd.to_datetime(min_utc,unit="ms") 
 
     max_utc = cleandf.utc.max()
-    ids = socialData['id']
+    all_ids = socialData['id']
 
     cleandf.set_index('date', inplace=True)
     cleandf = cleandf[cleandf['id'].isin(list(socialData['id']))]
 
+    ids = cleandf['id'].unique()
+
+    # calculate speed
+
+    newdf = addVelXY(cleandf)
+
     #### gather interactions
 
-    initialDate = '2016-10-10 11:50:01'
-    finalDate = '2016-10-10 11:51:06'
+    initialDate = '2016-10-10 11:15:18'
+    finalDate = '2016-10-10 12:44:13'
 
-    counter = getDInteractions_all(cleandf, initialDate, finalDate, 1)
+    counter = getDInteractions_all(newdf, initialDate, finalDate, 1)
 
     #### create graphs Comp, From and To
 
@@ -69,8 +75,8 @@ if __name__ ==  '__main__':
     attributes = ['Gender', 'Age_P', 'ProSoc_z_P', 'Conduct_z_P', 'Emotion_z_P', 'Peer_z_P', 'Hyper_z_P']
 
     transactionsComp = setCompAttDiEdges(GComp, socialData, attributes)
-    transactionsFrom = setFromAttDiEdges(GTo, socialData, attributes)
-    transactionsTo = setToAttDiEdges(GFrom, socialData, attributes)
+    transactionsFrom = setFromAttDiEdges(GFrom, socialData, attributes)
+    transactionsTo = setToAttDiEdges(GTo, socialData, attributes)
 
     #### Subgroup Discovery
 

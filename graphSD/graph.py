@@ -55,16 +55,16 @@ def getDInteractions(dataframe, start_time, end_time, proximity):
         for i in range(len(xs)):
             if xs[i] == ys[i]:
                 continue
-            vel1E = float(position.loc[position['id'] == ids[xs[i]]].velE)
-            vel1N = float(position.loc[position['id'] == ids[xs[i]]].velN)
+            vel1X = float(position.loc[position['id'] == ids[xs[i]]].velX)
+            vel1Y = float(position.loc[position['id'] == ids[xs[i]]].velY)
             
             vx = float(position.loc[position['id'] == ids[ys[i]]].x) - float(position.loc[position['id'] == ids[xs[i]]].x)
             vy = float(position.loc[position['id'] == ids[ys[i]]].y) - float(position.loc[position['id'] == ids[xs[i]]].y)
             
             cosine = 0
             
-            if (vel1E * vx + vel1N * vy) != 0:
-                cosine = (vel1E * vx + vel1N * vy)/(math.sqrt(vel1E**2 + vel1N**2) * math.sqrt(vx**2 + vy**2))
+            if (vel1X * vx + vel1Y * vy) != 0:
+                cosine = (vel1X * vx + vel1Y * vy)/(math.sqrt(vel1X**2 + vel1Y**2) * math.sqrt(vx**2 + vy**2))
             
             if cosine >= 0:
                 if (ids[xs[i]], ids[ys[i]]) in counter:
@@ -101,16 +101,16 @@ def getDInteractions_all(dataframe, start_time, end_time, proximity):
         for i in range(len(xs)):
             if xs[i] == ys[i]:
                 continue
-            vel1E = float(position.loc[position['id'] == ids[xs[i]]].velE)
-            vel1N = float(position.loc[position['id'] == ids[xs[i]]].velN)
+            vel1X = float(position.loc[position['id'] == ids[xs[i]]].velX)
+            vel1Y = float(position.loc[position['id'] == ids[xs[i]]].velY)
             
             vx = float(position.loc[position['id'] == ids[ys[i]]].x) - float(position.loc[position['id'] == ids[xs[i]]].x)
             vy = float(position.loc[position['id'] == ids[ys[i]]].y) - float(position.loc[position['id'] == ids[xs[i]]].y)
             
             cosine = 0
             
-            if (vel1E * vx + vel1N * vy) != 0:
-                cosine = (vel1E * vx + vel1N * vy)/(math.sqrt(vel1E**2 + vel1N**2) * math.sqrt(vx**2 + vy**2))
+            if (vel1X * vx + vel1Y * vy) != 0:
+                cosine = (vel1X * vx + vel1Y * vy)/(math.sqrt(vel1X**2 + vel1Y**2) * math.sqrt(vx**2 + vy**2))
             
             if cosine >= 0:
                 counter[(ids[xs[i]], ids[ys[i]])] += 1
@@ -141,16 +141,16 @@ def getMultiDInteractions(dataframe, start_time, end_time, proximity, nseconds =
         for i in range(len(xs)):
             if xs[i] == ys[i]:
                 continue
-            vel1E = float(position.loc[position['id'] == ids[xs[i]]].velE)
-            vel1N = float(position.loc[position['id'] == ids[xs[i]]].velN)
+            vel1X = float(position.loc[position['id'] == ids[xs[i]]].velX)
+            vel1Y = float(position.loc[position['id'] == ids[xs[i]]].velY)
             
             vx = float(position.loc[position['id'] == ids[ys[i]]].x) - float(position.loc[position['id'] == ids[xs[i]]].x)
             vy = float(position.loc[position['id'] == ids[ys[i]]].y) - float(position.loc[position['id'] == ids[xs[i]]].y)
             
             cosine = 0
             
-            if (vel1E * vx + vel1N * vy) != 0:
-                cosine = (vel1E * vx + vel1N * vy)/(math.sqrt(vel1E**2 + vel1N**2) * math.sqrt(vx**2 + vy**2))
+            if (vel1X * vx + vel1Y * vy) != 0:
+                cosine = (vel1X * vx + vel1Y * vy)/(math.sqrt(vel1X**2 + vel1Y**2) * math.sqrt(vx**2 + vy**2))
             
             if cosine >= 0: # following
                 oldInter[xs[i]][ys[i]] += 1
@@ -190,16 +190,16 @@ def getMultiDInteractions_all(dataframe, start_time, end_time, proximity, nsecon
         for i in range(len(xs)):
             if xs[i] == ys[i]:
                 continue
-            vel1E = float(position.loc[position['id'] == ids[xs[i]]].velE)
-            vel1N = float(position.loc[position['id'] == ids[xs[i]]].velN)
+            vel1X = float(position.loc[position['id'] == ids[xs[i]]].velX)
+            vel1Y = float(position.loc[position['id'] == ids[xs[i]]].velY)
             
             vx = float(position.loc[position['id'] == ids[ys[i]]].x) - float(position.loc[position['id'] == ids[xs[i]]].x)
             vy = float(position.loc[position['id'] == ids[ys[i]]].y) - float(position.loc[position['id'] == ids[xs[i]]].y)
             
             cosine = 0
             
-            if (vel1E * vx + vel1N * vy) != 0:
-                cosine = (vel1E * vx + vel1N * vy)/(math.sqrt(vel1E**2 + vel1N**2) * math.sqrt(vx**2 + vy**2))
+            if (vel1X * vx + vel1Y * vy) != 0:
+                cosine = (vel1X * vx + vel1Y * vy)/(math.sqrt(vel1X**2 + vel1Y**2) * math.sqrt(vx**2 + vy**2))
             
             if cosine >= 0: # following
                 oldInter[xs[i]][ys[i]] += 1
@@ -280,9 +280,7 @@ def setCompAttEdges(graph, dataframe, attributes, GL = None):
         nid1, nid2 = e
         eattr = {}
         for att in attributes:
-            if att == "Gender":
-                eattr[att] = str((dataframe[dataframe.id == nid1][att].item(), dataframe[dataframe.id == nid2][att].item()))
-            elif dataframe[dataframe.id == nid1][att].item() == dataframe[dataframe.id == nid2][att].item():
+            if dataframe[dataframe.id == nid1][att].item() == dataframe[dataframe.id == nid2][att].item():
                 eattr[att] = "EQ"
             else:
                 eattr[att] = "NEQ"
@@ -310,7 +308,9 @@ def setCompAttDiEdges(graph, dataframe, attributes, GL = None):
         nid1, nid2 = e
         eattr = {}
         for att in attributes:
-            if att == "Gender":
+            print(att, type(dataframe[dataframe.id == nid1][att].item()))
+            if type(dataframe[dataframe.id == nid1][att].item()) == type('str'):
+                print('here')
                 eattr[att] = str((dataframe[dataframe.id == nid1][att].item(), dataframe[dataframe.id == nid2][att].item()))
             elif dataframe[dataframe.id == nid1][att].item() == dataframe[dataframe.id == nid2][att].item():
                 eattr[att] = "EQ"

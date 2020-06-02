@@ -35,8 +35,9 @@ def getZ(val, mean, std):
     return (val - mean)/std
 
 
-def addVelXY(dataframe, ids):  # has to be sorted ascending by timestamp!!
+def addVelXY(dataframe):  # has to be sorted ascending by timestamp!!
     first = True
+    ids = dataframe.id.unique()
 
     for i in ids:
         tempdf = dataframe.query("id == @i").copy()

@@ -28,13 +28,17 @@ np.random.seed(1234)
 
     cleandf.set_index('date', inplace=True)
     cleandf = cleandf[cleandf['id'].isin(list(socialData['id']))]
+    
+    # calculate speed
+
+    newdf = addVelXY(cleandf)
 
     #### gather interactions
 
-    initialDate = '2016-10-10 11:50:01'
-    finalDate = '2016-10-10 12:00:06'
+    initialDate = '2016-10-10 11:15:18'
+    finalDate = '2016-10-10 12:44:13'
 
-    counter = getMultiDInteractions(cleandf, initialDate, finalDate, 0.5)
+    counter = getMultiDInteractions_all(newdf, initialDate, finalDate, 1)
 
     GComp = createMultiDiGraph(counter, ids)
     GFrom = createMultiDiGraph(counter, ids)
