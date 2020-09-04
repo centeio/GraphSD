@@ -66,41 +66,59 @@ if __name__ ==  '__main__':
 
     socialData['Hyper_z_P'] = getBins(3,list(socialData.Hyper_z))
 
+    #### Create signed graph
+
+    GLikes = nx.DiGraph()
+    GLikes.add_nodes_from(ids)
+
+    for n in list(GLikes.nodes()):
+        node1 = socialData[socialData.id == n]['Dislike 1'].item()
+        node2 = socialData[socialData.id == n]['Dislike 2'].item()
+        node3 = socialData[socialData.id == n]['Dislike 3'].item()
+        
+        id1 = socialData[socialData.ID == (node1)].id.item()
+        id2 = socialData[socialData.ID == (node2)].id.item()
+        id3 = socialData[socialData.ID == (node3)].id.item()
+        
+        GLikes.add_edge(n,id1)
+        GLikes.add_edge(n,id2)
+        GLikes.add_edge(n,id3)
+
     #### give attributes to graphs
 
     attributes = ['Gender', 'Age_P', 'ProSoc_z_P', 'Conduct_z_P', 'Emotion_z_P', 'Peer_z_P', 'Hyper_z_P']
 
-    transactionsComp = setMultiCompAttDiEdges(GComp, socialData, attributes)
-    transactionsFrom = setMultiFromAttDiEdges(GFrom, socialData, attributes)
-    transactionsTo = setMultiToAttDiEdges(GTo, socialData, attributes)
+    transactionsComp = setMultiCompAttDiEdges(GComp, socialData, attributes, GLikes)
+    transactionsFrom = setMultiFromAttDiEdges(GFrom, socialData, attributes, GLikes)
+    transactionsTo = setMultiToAttDiEdges(GTo, socialData, attributes, GLikes)
 
     #### Subgroup Discovery
 
     freqComp = freqItemsets(transactionsComp, 100)
     print('len of freq',len(freqComp))
 
-    compTQ = treeQuality(GComp,freqComp, qP,  samples = 100)
-    compTQ.sort(reverse=True)
-    infoPats(compTQ).to_csv('output/Comp_qPM_mean.csv', index=True)
+    #compTQ = treeQuality(GComp,freqComp, qP,  samples = 100)
+    #compTQ.sort(reverse=True)
+    #infoPats(compTQ).to_csv('output/Comp_signed_qPM_mean.csv', index=True)
 
     compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 100), qP,  samples = 100)
     compFrom.sort(reverse=True)
-    infoPats(compFrom).to_csv('output/From_qPM_mean.csv', index=True)
+    infoPats(compFrom).to_csv('output/From_signed_qPM_mean.csv', index=True)
 
     compTo = treeQuality(GTo,freqItemsets(transactionsTo, 100), qP,  samples = 100)
     compTo.sort(reverse=True)
-    infoPats(compTo).to_csv('output/To_qPM_mean.csv', index=True)
+    infoPats(compTo).to_csv('output/To_signed_qPM_mean.csv', index=True)
 
     # using variance as metric
 
     compTQ = treeQuality(GComp,freqItemsets(transactionsComp, 100), qP, metric = 'var',  samples = 100)
     compTQ.sort(reverse=True)
-    infoPats(compTQ).to_csv('output/Comp_qPM_var.csv', index=True)
+    infoPats(compTQ).to_csv('output/Comp_signed_qPM_var.csv', index=True)
 
     compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 100), qP, metric = 'var',  samples = 100)
     compFrom.sort(reverse=True)
-    infoPats(compFrom).to_csv('output/From_qPM_var.csv', index=True)
+    infoPats(compFrom).to_csv('output/From_signed_qPM_var.csv', index=True)
 
     compTo = treeQuality(GTo,freqItemsets(transactionsTo, 100), qP, metric = 'var',  samples = 100)
     compTo.sort(reverse=True)
-    infoPats(compTo).to_csv('output/To_qPM_var.csv', index=True)
+    infoPats(compTo).to_csv('output/To_signed_qPM_var.csv', index=True)

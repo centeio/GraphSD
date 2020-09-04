@@ -38,11 +38,13 @@ if __name__ ==  '__main__':
     initialDate = '2016-10-10 11:15:18'
     finalDate = '2016-10-10 12:44:13'
 
-    counter = getMultiDInteractions_all(newdf, initialDate, finalDate, 1)
+    counter = getDInteractions_between(newdf, initialDate, finalDate, 1)
 
-    GComp = createMultiDiGraph(counter, ids)
-    GFrom = createMultiDiGraph(counter, ids)
-    GTo = createMultiDiGraph(counter, ids)
+    #### create graphs Comp, From and To
+
+    GComp = createDiGraph(counter, ids)
+    GTo = createDiGraph(counter, ids)
+    GFrom = createDiGraph(counter, ids)
 
     #### PREPARE DATA
 
@@ -70,37 +72,42 @@ if __name__ ==  '__main__':
 
     attributes = ['Gender', 'Age_P', 'ProSoc_z_P', 'Conduct_z_P', 'Emotion_z_P', 'Peer_z_P', 'Hyper_z_P']
 
-    transactionsComp = setMultiCompAttDiEdges(GComp, socialData, attributes)
-    transactionsFrom = setMultiFromAttDiEdges(GFrom, socialData, attributes)
-    transactionsTo = setMultiToAttDiEdges(GTo, socialData, attributes)
+    transactionsComp = setCompAttDiEdges(GComp, socialData, attributes)
+    transactionsFrom = setFromAttDiEdges(GFrom, socialData, attributes)
+    transactionsTo = setToAttDiEdges(GTo, socialData, attributes)
 
     #### Subgroup Discovery
 
-    freqComp = freqItemsets(transactionsComp, 100)
-    print('len of freq',len(freqComp))
-
-    compTQ = treeQuality(GComp,freqComp, qP,  samples = 100)
+    compTQ = treeQuality(GComp,freqItemsets(transactionsComp, 10), qS)
     compTQ.sort(reverse=True)
-    infoPats(compTQ).to_csv('output/Comp_qPM_mean.csv', index=True)
+    infoPats(compTQ).to_csv('output/Comp_qSD_between_mean.csv', index=True)
 
-    compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 100), qP,  samples = 100)
+    compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 10), qS)
     compFrom.sort(reverse=True)
-    infoPats(compFrom).to_csv('output/From_qPM_mean.csv', index=True)
+    infoPats(compFrom).to_csv('output/From_qSD_between_mean.csv', index=True)
 
-    compTo = treeQuality(GTo,freqItemsets(transactionsTo, 100), qP,  samples = 100)
+    compTo = treeQuality(GTo,freqItemsets(transactionsTo, 10), qS)
     compTo.sort(reverse=True)
-    infoPats(compTo).to_csv('output/To_qPM_mean.csv', index=True)
+    infoPats(compTo).to_csv('output/To_qSD_between_mean.csv', index=True)
 
-    # using variance as metric
+    # Using variance as metric
 
-    compTQ = treeQuality(GComp,freqItemsets(transactionsComp, 100), qP, metric = 'var',  samples = 100)
+    compTQ = treeQuality(GComp,freqItemsets(transactionsComp, 10), qS, metric = 'var')
     compTQ.sort(reverse=True)
-    infoPats(compTQ).to_csv('output/Comp_qPM_var.csv', index=True)
+    infoPats(compTQ).to_csv('output/Comp_qSD_between_var.csv', index=True)
 
-    compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 100), qP, metric = 'var',  samples = 100)
+    compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 10), qS, metric = 'var')
     compFrom.sort(reverse=True)
-    infoPats(compFrom).to_csv('output/From_qPM_var.csv', index=True)
+    infoPats(compFrom).to_csv('output/From_qSD_between_var.csv', index=True)
 
-    compTo = treeQuality(GTo,freqItemsets(transactionsTo, 100), qP, metric = 'var',  samples = 100)
+    compTo = treeQuality(GTo,freqItemsets(transactionsTo, 10), qS, metric = 'var')
     compTo.sort(reverse=True)
-    infoPats(compTo).to_csv('output/To_qPM_var.csv', index=True)
+    infoPats(compTo).to_csv('output/To_qSD_between_var.csv', index=True)
+
+
+    #### visualize
+
+    #displayGender(GComp,ids, socialData, filtere=4)
+    #graphViz(compTQ[0].graph)
+
+    #TODO show example printpositions and printpositionsG

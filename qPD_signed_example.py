@@ -24,10 +24,12 @@ if __name__ ==  '__main__':
     #pd.to_datetime(min_utc,unit="ms") 
 
     max_utc = cleandf.utc.max()
-    ids = socialData['id']
+    all_ids = socialData['id']
 
     cleandf.set_index('date', inplace=True)
     cleandf = cleandf[cleandf['id'].isin(list(socialData['id']))]
+
+    ids = cleandf['id'].unique()
 
     # calculate speed
 
@@ -38,7 +40,7 @@ if __name__ ==  '__main__':
     initialDate = '2016-10-10 11:15:18'
     finalDate = '2016-10-10 12:44:13'
 
-    counter = getDInteractions(newdf, initialDate, finalDate, 1)
+    counter = getDInteractions_all(newdf, initialDate, finalDate, 1)
 
     #### create graphs Comp, From and To
 
@@ -68,13 +70,13 @@ if __name__ ==  '__main__':
 
     socialData['Hyper_z_P'] = getBins(3,list(socialData.Hyper_z))
 
+
     #### Create signed graph
 
     GLikes = nx.DiGraph()
     GLikes.add_nodes_from(ids)
 
     for n in list(GLikes.nodes()):
-        print(n, socialData[socialData.id == n])
         node1 = socialData[socialData.id == n]['Dislike 1'].item()
         node2 = socialData[socialData.id == n]['Dislike 2'].item()
         node3 = socialData[socialData.id == n]['Dislike 3'].item()
@@ -87,6 +89,7 @@ if __name__ ==  '__main__':
         GLikes.add_edge(n,id2)
         GLikes.add_edge(n,id3)
 
+
     #### give attributes to graphs
 
     attributes = ['Gender', 'Age_P', 'ProSoc_z_P', 'Conduct_z_P', 'Emotion_z_P', 'Peer_z_P', 'Hyper_z_P']
@@ -97,22 +100,28 @@ if __name__ ==  '__main__':
 
     #### Subgroup Discovery
 
-    compTQ = treeQuality(GComp,freqItemsets(transactionsComp, 10), qS, samples=100)
+    compTQ = treeQuality(GComp,freqItemsets(transactionsComp, 10), qP, samples=100)
     compTQ.sort(reverse=True)
-    infoPats(compTQ).to_csv('output/Comp_Signed_qSD.csv', index=True)
+    infoPats(compTQ).to_csv('output/Comp_signed_qPD.csv', index=True)
 
-    compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 10), qS, samples=100)
+    compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 10), qP, samples=100)
     compFrom.sort(reverse=True)
-    infoPats(compFrom).to_csv('output/From_Signed_qSD.csv', index=True)
+    infoPats(compFrom).to_csv('output/From_signed_qPD.csv', index=True)
 
-    compTo = treeQuality(GTo,freqItemsets(transactionsTo, 10), qS, samples=100)
+    compTo = treeQuality(GTo,freqItemsets(transactionsTo, 10), qP, samples=100)
     compTo.sort(reverse=True)
-    infoPats(compTo).to_csv('output/To_Signed_qSD.csv', index=True)
+    infoPats(compTo).to_csv('output/To_signed_qPD.csv', index=True)
 
 
-    #### visualize
 
-    #displayGender(GComp,ids, socialData, filtere=4)
-    #graphViz(compTQ[0].graph)
+    compTQ = treeQuality(GComp,freqItemsets(transactionsComp, 10), qP, metric = 'var', samples=100)
+    compTQ.sort(reverse=True)
+    infoPats(compTQ).to_csv('output/Comp_signed_qPD_var.csv', index=True)
 
-    #TODO show example printpositions and printpositionsG
+    compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 10), qP, metric = 'var', samples=100)
+    compFrom.sort(reverse=True)
+    infoPats(compFrom).to_csv('output/From_signed_qPD_var.csv', index=True)
+
+    compTo = treeQuality(GTo,freqItemsets(transactionsTo, 10), qP, metric = 'var', samples=100)
+    compTo.sort(reverse=True)
+    infoPats(compTo).to_csv('output/To_signed_qPD_var.csv', index=True)

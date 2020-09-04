@@ -6,39 +6,6 @@ import networkx as nx
 
 from graphSD.utils import *
 
-class NominalSelector:
-    def __init__(self, attribute, value):
-        self.attribute = attribute
-        self.value = value
-    def __repr__(self):
-        return "("+self.attribute+", "+ str(self.value)+")"
-    def __str__(self):
-        return "("+self.attribute+", "+ str(self.value)+")"
-    def __eq__(self, other):
-        return self.attribute == other.attribute and self.value == other.value
-    def __lt__(self, other):
-        if self.attribute != other.attribute:
-            return self.attribute < other.attribute
-        else:
-            return self.value < other.value
-    def __hash__(self):
-        return hash(str(self))
-
-class Pattern:
-    def __init__(self, name, graph, weight): #name has to be of type list of NominalSelector
-        self.name = name
-        self.graph = graph
-        self.weight = weight
-        self.quality = 0
-    def __repr__(self):
-        return str(self.name)
-    def __str__(self):
-        return str(self.name)
-    def __eq__(self, other):
-        set(self.name) == set(other.name)
-    def __lt__(self, other):
-        return self.quality < other.quality
-
 def getDInteractions(dataframe, start_time, end_time, proximity):
     ids = dataframe.id.unique()
     nids = len(ids)
@@ -224,9 +191,119 @@ def getMultiDInteractions_all(dataframe, start_time, end_time, proximity, nsecon
             counter += [(ids[xs[i]], ids[ys[i]], 0)]
 
     #counter = counter/count
-    maxW = max([w for x, y, w in counter])
+    #maxW = max([w for x, y, w in counter])
     
     return [(x,y,w) for x, y, w in counter]
+
+
+def getDInteractions_between(dataframe, start_time, end_time, proximity):
+    ids = dataframe.id.unique()
+    nids = len(ids)
+    counter = {}
+    timestamps = {}
+    interacting = {}
+    nseconds = 1
+    start_window = pd.Timestamp(start_time)
+    while start_window <= pd.Timestamp(end_time):
+        position = dataframe[str(start_window)].set_index("id").reindex(ids).reset_index()
+        dists = distance.cdist(position[['x','y']], position[['x','y']], 'euclidean')
+        
+        #distances < proximity -> add 1 to that relationship
+        dists = (np.array(dists) <= proximity) + 0
+        xs, ys = np.where(dists > 0)
+        for i in range(len(xs)):
+            if xs[i] == ys[i]:
+                continue
+            key = (ids[xs[i]], ids[ys[i]]) 
+            
+            vel1X = float(position.loc[position['id'] == ids[xs[i]]].velX)
+            vel1Y = float(position.loc[position['id'] == ids[xs[i]]].velY)
+            
+            vx = float(position.loc[position['id'] == ids[ys[i]]].x) - float(position.loc[position['id'] == ids[xs[i]]].x)
+            vy = float(position.loc[position['id'] == ids[ys[i]]].y) - float(position.loc[position['id'] == ids[xs[i]]].y)
+            
+            cosine = 0
+            
+            if (vel1X * vx + vel1Y * vy) != 0:
+                cosine = (vel1X * vx + vel1Y * vy)/(math.sqrt(vel1X**2 + vel1Y**2) * math.sqrt(vx**2 + vy**2))
+            
+            if cosine >= 0:
+                if key in interacting and interacting[key] == False:
+                    if key in counter:
+                        #print(start_window, timestamps[(ids[xs[i]], ids[ys[i]])])
+                        counter[key] += (start_window - timestamps[key]).seconds - 1
+                        #print(counter[(ids[xs[i]], ids[ys[i]])])
+                    else:
+                        #counter[key] = (start_window - timestamps[key]).seconds - 1
+                        counter[key] = 0
+                interacting[key] = True
+                timestamps[key] = start_window
+            else:
+                if key in interacting:
+                    interacting[key] = False
+                
+        start_window = start_window + pd.Timedelta(seconds = nseconds)
+        
+    #maxW = max(list(counter.values()))
+    
+    #counter = counter/count
+    return {key: value for key, value in counter.items()}
+
+def getMultiDInteractions_between(dataframe, start_time, end_time, proximity, nseconds = 1):
+    ids = dataframe.id.unique()
+    nids = len(ids)
+    oldInter = np.zeros((nids, nids)) - np.ones((nids, nids))
+    counter = []
+    start_window = pd.Timestamp(start_time)
+    timestamps = {}
+    
+    while start_window <= pd.Timestamp(end_time):
+        position = dataframe[str(start_window)].set_index("id").reindex(ids).reset_index()
+        dists = distance.cdist(position[['x','y']], position[['x','y']], 'euclidean')
+        
+        #distances < proximity -> add 1 to that relationship
+        dists = (np.array(dists) <= proximity) + 0
+        xs, ys = np.where(dists > 0)
+        for i in range(len(xs)):
+            if xs[i] == ys[i]:
+                continue
+            vel1E = float(position.loc[position['id'] == ids[xs[i]]].velE)
+            vel1N = float(position.loc[position['id'] == ids[xs[i]]].velN)
+            
+            vx = float(position.loc[position['id'] == ids[ys[i]]].x) - float(position.loc[position['id'] == ids[xs[i]]].x)
+            vy = float(position.loc[position['id'] == ids[ys[i]]].y) - float(position.loc[position['id'] == ids[xs[i]]].y)
+            
+            cosine = 0
+            
+            if (vel1E * vx + vel1N * vy) != 0:
+                cosine = (vel1E * vx + vel1N * vy)/(math.sqrt(vel1E**2 + vel1N**2) * math.sqrt(vx**2 + vy**2))
+            
+            if cosine >= 0: # following
+                if oldInter[xs[i]][ys[i]] == -1:
+                    if (ids[xs[i]], ids[ys[i]]) in timestamps:
+                        oldInter[xs[i]][ys[i]] = (start_window - timestamps[(ids[xs[i]], ids[ys[i]])]).seconds
+                        print(start_window, timestamps[(ids[xs[i]], ids[ys[i]])], oldInter[xs[i]][ys[i]])
+                    else:
+                        oldInter[xs[i]][ys[i]] = 0
+
+            else:
+                if oldInter[xs[i]][ys[i]] >= 0:
+                    counter += [(ids[xs[i]], ids[ys[i]], oldInter[xs[i]][ys[i]])]
+                    oldInter[xs[i]][ys[i]] = -1
+                    timestamps[(ids[xs[i]], ids[ys[i]])] = start_window
+            
+        start_window = start_window + pd.Timedelta(seconds = nseconds)
+        
+    #add last edges (the ones that never stop existing)
+    xs, ys = np.where(oldInter > 0)
+    for i in range(len(xs)):
+        counter += [(ids[xs[i]], ids[ys[i]], oldInter[xs[i]][ys[i]])]
+    
+    #counter = counter/count
+    #maxW = max([w for x, y, w in counter])
+    
+    return [(x,y,w) for x, y, w in counter]
+
 
 def getWEdges(counter):
     gedges = []
@@ -287,9 +364,7 @@ def setCompAttEdges(graph, dataframe, attributes, GL = None):
             tr.append(NominalSelector(att, eattr[att]))
         
         if GL != None:
-            if GL.has_edge(nid1,nid2):
-                eattr['weight'] = 1
-            else:
+            if not GL.has_edge(nid1,nid2):
                 eattr['weight'] = 0
             
         attr[e] = eattr
@@ -308,9 +383,7 @@ def setCompAttDiEdges(graph, dataframe, attributes, GL = None):
         nid1, nid2 = e
         eattr = {}
         for att in attributes:
-            print(att, type(dataframe[dataframe.id == nid1][att].item()))
             if type(dataframe[dataframe.id == nid1][att].item()) == type('str'):
-                print('here')
                 eattr[att] = str((dataframe[dataframe.id == nid1][att].item(), dataframe[dataframe.id == nid2][att].item()))
             elif dataframe[dataframe.id == nid1][att].item() == dataframe[dataframe.id == nid2][att].item():
                 eattr[att] = "EQ"
@@ -321,9 +394,7 @@ def setCompAttDiEdges(graph, dataframe, attributes, GL = None):
             tr.append(NominalSelector(att, eattr[att]))
         
         if GL != None:
-            if GL.has_edge(nid1,nid2):
-                eattr['weight'] = 1
-            else:
+            if not GL.has_edge(nid1,nid2):
                 eattr['weight'] = 0
             
         attr[e] = eattr
@@ -350,9 +421,7 @@ def setFromAttDiEdges(graph, dataframe, attributes, GL = None):
         transactions.append(tr)
                 
         if GL != None:
-            if GL.has_edge(nid1,nid2):
-                eattr['weight'] = 1
-            else:
+            if not GL.has_edge(nid1,nid2):
                 eattr['weight'] = 0
 
     nx.set_edge_attributes(graph, attr)
@@ -375,15 +444,13 @@ def setToAttDiEdges(graph, dataframe, attributes, GL = None):
         transactions.append(tr)
 
         if GL != None:
-            if GL.has_edge(nid1,nid2):
-                eattr['weight'] = 1
-            else:
-                eattr['weight'] = 0    
+            if not GL.has_edge(nid1,nid2):
+                eattr['weight'] = 0
 
     nx.set_edge_attributes(graph, attr)
     return transactions
 
-def setMultiCompAttDiEdges(G, demogdata, attributes, GL = None):
+def setMultiCompAttDiEdges(G, dataframe, attributes, GL = None):
     attr = {}
     transactions = []
     tr = []
@@ -393,13 +460,13 @@ def setMultiCompAttDiEdges(G, demogdata, attributes, GL = None):
         nid1, nid2, ekey, edict = e
         #eattr = {}
         for att in attributes:
-            if att == "Gender":
-                #eattr[att] = str((demogdata[demogdata.id == nid1][att].item(), demogdata[demogdata.id == nid2][att].item()))
-                edict[att] = str((demogdata[demogdata.id == nid1][att].item(), demogdata[demogdata.id == nid2][att].item()))
-            elif demogdata[demogdata.id == nid1][att].item() == demogdata[demogdata.id == nid2][att].item():
+            if type(dataframe[dataframe.id == nid1][att].item()) == type('str'):
+                #eattr[att] = str((dataframe[dataframe.id == nid1][att].item(), dataframe[dataframe.id == nid2][att].item()))
+                edict[att] = str((dataframe[dataframe.id == nid1][att].item(), dataframe[dataframe.id == nid2][att].item()))
+            elif dataframe[dataframe.id == nid1][att].item() == dataframe[dataframe.id == nid2][att].item():
                 #eattr[att] = "EQ"
                 edict[att] = "EQ"
-            elif demogdata[demogdata.id == nid1][att].item() > demogdata[demogdata.id == nid2][att].item():
+            elif dataframe[dataframe.id == nid1][att].item() > dataframe[dataframe.id == nid2][att].item():
                 #eattr[att] = ">"
                 edict[att] = ">"
             else:
@@ -408,9 +475,7 @@ def setMultiCompAttDiEdges(G, demogdata, attributes, GL = None):
             tr.append(NominalSelector(att, edict[att]))
 
         if GL != None:
-            if GL.has_edge(nid1,nid2):
-                edict['weight'] = 1
-            else:
+            if not GL.has_edge(nid1,nid2):
                 edict['weight'] = 0
             
         #attr[e] = eattr
@@ -420,7 +485,7 @@ def setMultiCompAttDiEdges(G, demogdata, attributes, GL = None):
     #nx.set_edge_attributes(G, attr)
     return transactions
 
-def setMultiFromAttDiEdges(G, demogdata, attributes, GL = None):
+def setMultiFromAttDiEdges(G, dataframe, attributes, GL = None):
     attr = {}
     transactions = []
     tr = []
@@ -430,8 +495,8 @@ def setMultiFromAttDiEdges(G, demogdata, attributes, GL = None):
         nid1, nid2, ekey, edict = e
         #eattr = {}
         for att in attributes:
-            #eattr[att] = demogdata[demogdata.id == nid1][att].item()
-            edict[att] = demogdata[demogdata.id == nid1][att].item()
+            #eattr[att] = dataframe[dataframe.id == nid1][att].item()
+            edict[att] = dataframe[dataframe.id == nid1][att].item()
             
             tr.append(NominalSelector(att, edict[att]))
             
@@ -440,15 +505,13 @@ def setMultiFromAttDiEdges(G, demogdata, attributes, GL = None):
         i += 1
                 
         if GL != None:
-            if GL.has_edge(nid1,nid2):
-                edict['weight'] = 1
-            else:
+            if not GL.has_edge(nid1,nid2):
                 edict['weight'] = 0
 
     #nx.set_edge_attributes(G, attr)
     return transactions
 
-def setMultiToAttDiEdges(G, demogdata, attributes, GL = None):
+def setMultiToAttDiEdges(G, dataframe, attributes, GL = None):
     attr = {}
     transactions = []
     tr = []
@@ -458,8 +521,8 @@ def setMultiToAttDiEdges(G, demogdata, attributes, GL = None):
         nid1, nid2, ekey, edict = e
         #eattr = {}
         for att in attributes:
-            #eattr[att] = demogdata[demogdata.id == nid2][att].item()
-            edict[att] = demogdata[demogdata.id == nid2][att].item()
+            #eattr[att] = dataframe[dataframe.id == nid2][att].item()
+            edict[att] = dataframe[dataframe.id == nid2][att].item()
                 
             tr.append(NominalSelector(att, edict[att]))
             
@@ -468,14 +531,11 @@ def setMultiToAttDiEdges(G, demogdata, attributes, GL = None):
         i += 1
 
         if GL != None:
-            if GL.has_edge(nid1,nid2):
-                edict['weight'] = 1
-            else:
+            if not GL.has_edge(nid1,nid2):
                 edict['weight'] = 0
 
     #nx.set_edge_attributes(G, attr)
-    return transactions
-
+    return transactions    
 
 def edgesInPDescription(G, P):
     edges = []
@@ -540,4 +600,14 @@ def infoPats(listOfPatterns):
             out_nodes = len([y for (x,y)  in list(p.graph.out_degree()) if y > 0])
             my_df = my_df.append({'Pattern': p.name, 'Nodes': nnodes, 'in': in_nodes, 'out': out_nodes, 'Edges': nedges, 'Mean Weight': round(p.weight,1),'Score': round(p.quality,1)}, ignore_index=True)
                 
+    return my_df
+
+def infoPats_nodes(listOfPatterns, dataset):
+    col_names =  ['Pattern', 'N', 'ids', 'Mean Weight', 'Score']
+    my_df  = pd.DataFrame(columns = col_names)
+    for p in listOfPatterns:
+        n = len(p.ids)
+        tempids = len(dataset.iloc[p.ids,0].unique())
+        my_df = my_df.append({'Pattern': p.name, 'N': n, 'ids': tempids, 'Mean Weight': round(p.weight,1),'Score': round(p.quality,1)}, ignore_index=True)
+            
     return my_df

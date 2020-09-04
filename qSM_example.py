@@ -10,7 +10,7 @@ from graphSD.sd import *
 
 np.random.seed(1234)
 
-    if __name__ ==  '__main__':
+if __name__ ==  '__main__':
 
     socialData = pd.read_csv('./data/useme2.csv', dtype={'id':str})
 
@@ -38,7 +38,7 @@ np.random.seed(1234)
     initialDate = '2016-10-10 11:15:18'
     finalDate = '2016-10-10 12:44:13'
 
-    counter = getMultiDInteractions_all(newdf, initialDate, finalDate, 1)
+    counter = getMultiDInteractions(newdf, initialDate, finalDate, 1)
 
     GComp = createMultiDiGraph(counter, ids)
     GFrom = createMultiDiGraph(counter, ids)
@@ -76,28 +76,28 @@ np.random.seed(1234)
 
     #### Subgroup Discovery
 
-    compTQ = treeQuality(GComp,freqItemsets(transactionsComp, 10), qS)
+    compTQ = treeQuality(GComp,freqItemsets(transactionsComp, 100), qS, samples = 100)
     compTQ.sort(reverse=True)
     infoPats(compTQ).to_csv('output/Comp_qSM_mean.csv', index=True)
 
-    compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 10), qS)
+    compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 100), qS, samples = 100)
     compFrom.sort(reverse=True)
     infoPats(compFrom).to_csv('output/From_qSM_mean.csv', index=True)
 
-    compTo = treeQuality(GTo,freqItemsets(transactionsTo, 10), qS)
+    compTo = treeQuality(GTo,freqItemsets(transactionsTo, 100), qS, samples = 100)
     compTo.sort(reverse=True)
     infoPats(compTo).to_csv('output/To_qSM_mean.csv', index=True)
 
     # using variance as metric
 
-    compTQ = treeQuality(GComp,freqItemsets(transactionsComp, 10), qS, 'var')
-    compTQ.sort(reverse=True)
-    infoPats(compTQ).to_csv('output/Comp_qSM_var.csv', index=True)
+    #compTQ = treeQuality(GComp,freqItemsets(transactionsComp, 10), qS, 'var')
+    #compTQ.sort(reverse=True)
+    #infoPats(compTQ).to_csv('output/Comp_qSM_var.csv', index=True)
 
-    compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 10), qS, 'var')
-    compFrom.sort(reverse=True)
-    infoPats(compFrom).to_csv('output/From_qSM_var.csv', index=True)
+    #compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 10), qS, 'var')
+    #compFrom.sort(reverse=True)
+    #infoPats(compFrom).to_csv('output/From_qSM_var.csv', index=True)
 
-    compTo = treeQuality(GTo,freqItemsets(transactionsTo, 10), qS, 'var')
-    compTo.sort(reverse=True)
-    infoPats(compTo).to_csv('output/To_qSM_var.csv', index=True)
+    #compTo = treeQuality(GTo,freqItemsets(transactionsTo, 10), qS, 'var')
+    #compTo.sort(reverse=True)
+    #infoPats(compTo).to_csv('output/To_qSM_var.csv', index=True)

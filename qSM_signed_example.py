@@ -38,7 +38,7 @@ if __name__ ==  '__main__':
     initialDate = '2016-10-10 11:15:18'
     finalDate = '2016-10-10 12:44:13'
 
-    counter = getMultiDInteractions_all(newdf, initialDate, finalDate, 1)
+    counter = getMultiDInteractions(newdf, initialDate, finalDate, 1)
 
     GComp = createMultiDiGraph(counter, ids)
     GFrom = createMultiDiGraph(counter, ids)
@@ -95,14 +95,14 @@ if __name__ ==  '__main__':
 
     #### Subgroup Discovery
 
-    compTQ = treeQuality(GComp,freqItemsets(transactionsComp, 10), qS)
+    compTQ = treeQuality(GComp,freqItemsets(transactionsComp, 100), qS, samples=100)
     compTQ.sort(reverse=True)
     infoPats(compTQ).to_csv('output/Comp_signed_qSM.csv', index=True)
 
-    compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 10), qS)
+    compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 100), qS, samples=100)
     compFrom.sort(reverse=True)
     infoPats(compFrom).to_csv('output/From_signed_qSM.csv', index=True)
 
-    compTo = treeQuality(GTo,freqItemsets(transactionsTo, 10), qS)
+    compTo = treeQuality(GTo,freqItemsets(transactionsTo, 100), qS, samples=100)
     compTo.sort(reverse=True)
     infoPats(compTo).to_csv('output/To_signed_qSM.csv', index=True)

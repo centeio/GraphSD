@@ -148,6 +148,7 @@ def qP(G, P, nsamples, metric = 'mean'):
     pool = ThreadPool(2)
 
     for r in range(nsamples):
+        print("sample:", r)
         indxs = np.random.choice(range(len(list(G.edges()))), len(list(pat.graph.edges())), replace = False) 
         randomE = [list(G.edges(data = True))[i] for i in indxs]
         #tempres = qPaux(randomE, metric)
@@ -168,10 +169,13 @@ def qP(G, P, nsamples, metric = 'mean'):
 
 
 def treeQuality(G, nodes, q, metric = 'mean', multiprocess = True, samples = 1000):
+    i = 0
     if multiprocess:
         pool = mp.Pool(mp.cpu_count())
         qs = []
         for k,_ in nodes.items():
+            print("tree:",i)
+            i += 1
             pool.apply_async(q, args=(G, k, samples, metric), callback=qs.append)
         pool.close()
         pool.join()
@@ -181,6 +185,103 @@ def treeQuality(G, nodes, q, metric = 'mean', multiprocess = True, samples = 100
     return qs
 
 
+##############################
+##### Outlier Detection ######
+##############################
 
 
+def idsInP(dataset, P, target):
+    pids = []
+    wsum = 0
+
+    query = ""
+    first = True
+    
+    for sel in P:
+        if first:
+            first = False
+        else:
+            query += " & "
+        if type(sel.value) == str:
+            query += sel.attribute + " == '" + sel.value + "'"
+        else:
+            query += sel.attribute + " == " + str(sel.value)
+    
+    print(query)
+        
+    for index, row in dataset.query(query).iterrows():
+        pids += [index]
+        wsum += row[target]        
+
+    
+    nEp = len(pids) # number of nodes covered by a pattern P
+    nE = len(dataset) # number of all possible edges
+    
+    if nE == 0:
+        w = 0
+    else:
+        w = wsum/nEp
+    
+    print(w)
+    pat = NoGPattern(P, pids, w)
+    
+    return pat
+
+# Measure quality of subgroups
+def qs_nodes_aux(dataframe, eids, target):
+    wsum = 0
+        
+    for index, row in dataframe.iloc[eids,:].iterrows():
+        wsum += row[target]
+
+    
+    return wsum/len(eids)
+
+def qs_nodes(dataset, P, freq, nsamples, target):    
+    pat = idsInP(dataset, P, target)
+    #print('edges ', len(edges))
+    
+    #totalE = round((len(list(G.nodes())) * (len(list(G.nodes())) - 1)))
+    #print(P)
+    #print(qres)
+    #print(nodes)
+    
+    temp_ids = dataset.index.values.tolist()
+    
+    sample = []
+    
+    #print('P ', P)
+    #print('n: ', pat.ids)
+    
+    
+    for r in range(nsamples):
+        indxs = np.random.choice(temp_ids, len(pat.ids), replace = False) 
+        #print(indxs)
+        #print(len(randomE))
+        tempres = qs_nodes_aux(dataset, indxs, target)
+        #print(tempres)
+        sample = np.append(sample, [tempres])
+        
+    mean = np.mean(sample)
+    #print('mean ',mean)
+    std = np.std(sample)
+    #print('std ',std)
+    #print('weight ', pat.weight)
+    
+    pat.quality = (pat.weight - mean)/std
+    #print(pat)
+    return pat
+
+def treeQuality_nodes(dataset, nodes, target):
+    dataset2 = dataset.copy()
+    dataset2 = dataset2.reset_index()
+    qs = []
+    for k, val in nodes.items(): 
+        try:
+            pat = qs_nodes(dataset2, k, val, 100, target)
+            qs += [pat]
+        except ZeroDivisionError:
+            continue
+   
+    return qs
 

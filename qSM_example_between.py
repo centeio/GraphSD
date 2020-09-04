@@ -28,7 +28,7 @@ if __name__ ==  '__main__':
 
     cleandf.set_index('date', inplace=True)
     cleandf = cleandf[cleandf['id'].isin(list(socialData['id']))]
-
+    
     # calculate speed
 
     newdf = addVelXY(cleandf)
@@ -38,7 +38,7 @@ if __name__ ==  '__main__':
     initialDate = '2016-10-10 11:15:18'
     finalDate = '2016-10-10 12:44:13'
 
-    counter = getMultiDInteractions_all(newdf, initialDate, finalDate, 1)
+    counter = getMultiDInteractions_between(newdf, initialDate, finalDate, 1)
 
     GComp = createMultiDiGraph(counter, ids)
     GFrom = createMultiDiGraph(counter, ids)
@@ -66,30 +66,9 @@ if __name__ ==  '__main__':
 
     socialData['Hyper_z_P'] = getBins(3,list(socialData.Hyper_z))
 
-    ## metrics
-
-    hubs, auths = nx.hits(GComp)
-    degC = nx.centrality.degree_centrality(GComp)
-    inDeg = nx.centrality.in_degree_centrality(GComp)
-    outDeg = nx.centrality.out_degree_centrality(GComp)
-    eigC = nx.centrality.eigenvector_centrality(GComp)
-    closeness = nx.centrality.closeness_centrality(GComp)
-    betweeness = nx.centrality.betweenness_centrality(GComp)
-    pagerank = nx.pagerank(GComp)
-
-    socialData['hubs'] = getBins(3,list(hubs.values())).copy()
-    socialData['auths'] = getBins(3,list(auths.values())).copy()
-    socialData['degC'] = getBins(3,list(degC.values())).copy()
-    socialData['outDeg'] = getBins(3,list(outDeg.values())).copy()
-    socialData['inDeg'] = getBins(3,list(inDeg.values())).copy()
-    socialData['eigC'] = getBins(3,list(eigC.values())).copy()
-    socialData['closeness'] = getBins(3,list(closeness.values())).copy()
-    socialData['betweeness'] = getBins(3,list(betweeness.values())).copy()
-    socialData['pagerank'] = getBins(3,list(pagerank.values())).copy()
-
     #### give attributes to graphs
 
-    attributes = ["Gender", "Age_P", "hubs", "auths", "degC", "outDeg", "inDeg", "eigC", "closeness", "betweeness", "pagerank"]
+    attributes = ['Gender', 'Age_P', 'ProSoc_z_P', 'Conduct_z_P', 'Emotion_z_P', 'Peer_z_P', 'Hyper_z_P']
 
     transactionsComp = setMultiCompAttDiEdges(GComp, socialData, attributes)
     transactionsFrom = setMultiFromAttDiEdges(GFrom, socialData, attributes)
@@ -97,14 +76,28 @@ if __name__ ==  '__main__':
 
     #### Subgroup Discovery
 
-    compTQ = treeQuality(GComp,freqItemsets(transactionsComp, 10), qP)
-    compTQ.sort(reverse=True)
-    infoPats(compTQ).to_csv('output/Comp_qPM.csv', index=True)
+    #compTQ = treeQuality(GComp,freqItemsets(transactionsComp, 100), qS, samples = 100)
+    #compTQ.sort(reverse=True)
+    #infoPats(compTQ).to_csv('output/Comp_qSM_mean.csv', index=True)
 
-    compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 10), qP)
+    compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 100), qS, samples = 100)
     compFrom.sort(reverse=True)
-    infoPats(compFrom).to_csv('output/From_qPM.csv', index=True)
+    infoPats(compFrom).to_csv('output/From_qSM_mean.csv', index=True)
 
-    compTo = treeQuality(GTo,freqItemsets(transactionsTo, 10), qP)
+    compTo = treeQuality(GTo,freqItemsets(transactionsTo, 100), qS, samples = 100)
     compTo.sort(reverse=True)
-    infoPats(compTo).to_csv('output/To_qPM.csv', index=True)
+    infoPats(compTo).to_csv('output/To_qSM_mean.csv', index=True)
+
+    # using variance as metric
+
+    compTQ = treeQuality(GComp,freqItemsets(transactionsComp, 10), qS, 'var')
+    compTQ.sort(reverse=True)
+    infoPats(compTQ).to_csv('output/Comp_qSM_var.csv', index=True)
+
+    compFrom = treeQuality(GFrom,freqItemsets(transactionsFrom, 10), qS, 'var')
+    compFrom.sort(reverse=True)
+    infoPats(compFrom).to_csv('output/From_qSM_var.csv', index=True)
+
+    compTo = treeQuality(GTo,freqItemsets(transactionsTo, 10), qS, 'var')
+    compTo.sort(reverse=True)
+    infoPats(compTo).to_csv('output/To_qSM_var.csv', index=True)
