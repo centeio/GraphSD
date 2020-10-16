@@ -1,9 +1,5 @@
-#from plotly.offline import init_notebook_mode, iplot
-#from IPython.display import display, HTML
 import matplotlib.pyplot as plt
 import networkx as nx
-from graphSD.graph import *
-from graphSD.utils import *
 
 def graphViz(graph, width=1):
     ecolors = list(nx.get_edge_attributes(graph,'weight').values())
