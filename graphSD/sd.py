@@ -5,7 +5,7 @@ import multiprocessing as mp
 from multiprocessing.dummy import Pool as ThreadPool
 
 
-from graphSD.graph import *
+from graphsd.graph import *
 
 def edgesOfP(G, P):
     edges = []

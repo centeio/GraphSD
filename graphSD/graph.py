@@ -4,7 +4,7 @@ from scipy.spatial import distance
 import math
 import networkx as nx
 
-from graphSD.utils import *
+from graphsd.utils import *
 
 def getDInteractions(dataframe, start_time, end_time, proximity):
     ids = dataframe.id.unique()

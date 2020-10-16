@@ -7,7 +7,7 @@ from sklearn.neighbors import LocalOutlierFactor
 import matplotlib.pyplot as plt
 from shapely.geometry import MultiPoint, Point, Polygon
 
-from graphSD.utils import *
+from graphsd.utils import *
 
 
 def voronoi_finite_polygons_2d(vor, radius=None): ## NOT MY ORIGINAL CODE
