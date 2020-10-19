@@ -21,6 +21,7 @@ class NominalSelector:
     def __hash__(self):
         return hash(str(self))
 
+# This class should be renamed to Subgroup
 class Pattern:
     def __init__(self, name, graph, weight): #name has to be of type list of NominalSelector
         self.name = name
@@ -51,9 +52,11 @@ class NoGPattern:
     def __lt__(self, other):
         return self.quality < other.quality
 
-def getBins(numBins, data):
+def get_bins(numBins, data):
+
+    data = list(data)
+
     data_points_per_bin = math.ceil(len(data) / numBins)
-    #listProSoc = list(socialData.ProSoc_z)
     sortedData = data.copy()
     sortedData.sort()
     
@@ -77,7 +80,6 @@ def getBins(numBins, data):
 
 def getBins2(numBins, data):
     data_points_per_bin = math.ceil(len(data) / numBins)
-    #listProSoc = list(socialData.ProSoc_z)
     sortedData = data.copy()
     sortedData.sort()
     
@@ -104,9 +106,12 @@ def getBins2(numBins, data):
     return binList
 
 
+# def getZ(val, mean, std):
+#     return (val - mean)/std
 
-def getZ(val, mean, std):
-    return (val - mean)/std
+
+def get_z_score(val):
+    return (val - np.mean(val)) / np.std(val)
 
 
 def addVelXY(dataframe):  # has to be sorted ascending by timestamp!!
@@ -139,6 +144,7 @@ def addVelXY(dataframe):  # has to be sorted ascending by timestamp!!
 
     return resdf
 
+
 def freqItemsets(transactions, prun = 20):
     intTransactionsDict = {}
     last = 1
@@ -170,3 +176,18 @@ def freqItemsets(transactions, prun = 20):
         newTransactions[temp] = count
         
     return newTransactions
+
+
+def to_dataframe(subgroups):
+    col_names = ['Pattern', 'Nodes', 'in', 'out', 'Edges', 'Mean Weight', 'Score']
+    dataframe = pd.DataFrame(columns=col_names)
+    for p in subgroups:
+        if type(p) == Pattern:
+            in_nodes = len([y for (x, y) in list(p.graph.in_degree()) if y > 0])
+            out_nodes = len([y for (x, y) in list(p.graph.out_degree()) if y > 0])
+            dataframe = dataframe.append(
+                {'Pattern': p.name, 'Nodes': p.graph.number_of_nodes(), 'in': in_nodes, 'out': out_nodes,
+                 'Edges': p.graph.number_of_edges(),
+                 'Mean Weight': round(p.weight, 1), 'Score': round(p.quality, 1)}, ignore_index=True)
+
+    return dataframe
