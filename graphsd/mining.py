@@ -33,7 +33,7 @@ class GraphSDMining(object):
         self.quality_measure_aux = None
 
     @staticmethod
-    def get_frequent_edges(transactions, min_support):
+    def get_frequent_items(transactions, min_support):
         transactions_dict = {}
         last = 1
         transactions_as_int = []
@@ -73,14 +73,14 @@ class GraphSDMining(object):
         # TODO: random_state is not working
         np.random.seed(self.random_state)
         transactions = self._get_transactions(mode)
-        frequent_items = self.get_frequent_edges(transactions, min_support)
+        frequent_items = self.get_frequent_items(transactions, min_support)
 
         if quality_measure == 'qP':
-            quality_function = self.quality_measure_p
-            self.quality_measure_aux = self.quality_measure_p_aux
+            quality_function = self.quality_measure_base
+            self.quality_measure_aux = self.measure_score_p
         elif quality_measure == 'qS':
-            quality_function = self.quality_measure_s
-            self.quality_measure_aux = self.quality_measure_s_aux
+            quality_function = self.quality_measure_base
+            self.quality_measure_aux = self.measure_score_s
         else:
             msg = "Unknown quality function. Current ones are: ['qP','qS']"
             ValueError(msg)
@@ -89,49 +89,53 @@ class GraphSDMining(object):
             pool = Pool(self.n_jobs)
             subgroups = []
             for k, _ in frequent_items.items():
-                pool.apply_async(quality_function, args=(k, metric),
+                pool.apply_async(quality_function, args=(k, metric, quality_measure),
                                  callback=subgroups.append)
             pool.close()
             pool.join()
         else:
-            subgroups = [quality_function(k, metric=metric) for k, _ in frequent_items.items()]
+            subgroups = [quality_function(k, metric=metric, measure_type=quality_measure)
+                         for k, _ in frequent_items.items()]
 
         subgroups.sort(reverse=True)
 
         return subgroups
 
-    def quality_measure_s(self, pattern, metric):
+    def quality_measure_base(self, pattern, metric, measure_type='qS'):
 
-        total_edges = self.graph.number_of_nodes() * (self.graph.number_of_nodes() - 1)
-
-        print("Is measuring quality S")
         if type(self.graph) == Graph:
             graph_of_pattern = Graph()
         elif type(self.graph) == DiGraph:
             graph_of_pattern = DiGraph()
         elif type(self.graph) == MultiGraph:
             graph_of_pattern = MultiGraph()
-            total_edges += self.count_edges(self.graph, self.graph.nodes)
-            print(total_edges)
         elif type(self.graph) == MultiDiGraph:
             graph_of_pattern = MultiDiGraph()
-            total_edges += self.count_edges(self.graph, self.graph.nodes)
-            print(total_edges)
+        else:
+            msg = f"Unknown graph type"
+            ValueError(msg)
 
-        edges = self.get_edges_in_pattern(self.graph, pattern)
-        graph_of_pattern.add_edges_from(edges)
+        edges_list = self.get_edges_in_pattern(pattern)
+        graph_of_pattern.add_edges_from(edges_list)
 
-        w = self.quality_measure_aux(edges, metric)
-        subgroup = Pattern(pattern, graph_of_pattern, w)
+        score = self.quality_measure_aux(edges_list, metric)
+        subgroup = Pattern(pattern, graph_of_pattern, score)
 
-        mean, std = self.statistical_validation(self.n_samples, interval=total_edges,
-                                                pattern_size=len(edges), metric=metric)
+        # The difference between the two measures is how they consider the maximum number of edges
+        if measure_type == 'qS':
+            print("Is measuring quality S")
+            max_n_edges = self.graph.max_edges
+        elif measure_type == 'qP':
+            max_n_edges = self.graph.size()
+
+        mean, std = self.statistical_validation(self.n_samples, max_n_edges=max_n_edges,
+                                                pattern_size=len(edges_list), metric=metric)
 
         subgroup.quality = (subgroup.weight - mean) / std
 
         return subgroup
 
-    def statistical_validation(self, n_samples, interval, pattern_size, metric):
+    def statistical_validation(self, n_samples, max_n_edges, pattern_size, metric):
         """
 
         This function randomly generates graphs and measures their score
@@ -140,7 +144,7 @@ class GraphSDMining(object):
         ----------
         pattern_size
         n_samples
-        interval
+        max_n_edges
         size
         metric
 
@@ -158,8 +162,8 @@ class GraphSDMining(object):
         for r in range(n_samples):
             # indexes = np.random.choice(range(interval), pattern_size, replace=False)
             # random_edges = [list_of_edges[i] for i in indexes]
-            # TODO: Needs to be confirmed if commnented version is the correct or not!
-            indexes = np.random.choice(range(interval), pattern_size, replace=False)
+            # TODO: Needs to be confirmed if commented version is the correct or not!
+            indexes = np.random.choice(range(max_n_edges), pattern_size, replace=False)
             random_edges = [list_of_edges[i] for i in indexes if i < graph_size]
             pool.apply_async(self.quality_measure_aux, args=(random_edges, metric), callback=sample.append)
 
@@ -171,58 +175,31 @@ class GraphSDMining(object):
 
         return mean, std
 
-    # TODO: Merge with S
-    def quality_measure_p(self, pattern, metric):
-
-        if type(self.graph) == Graph:
-            graph_of_pattern = Graph()
-        elif type(self.graph) == DiGraph:
-            graph_of_pattern = DiGraph()
-        elif type(self.graph) == MultiGraph:
-            graph_of_pattern = MultiGraph()
-        elif type(self.graph) == MultiDiGraph:
-            graph_of_pattern = MultiDiGraph()
-        else:
-            msg = f"Unknown graph type"
-            ValueError(msg)
-
-        edges = self.get_edges_in_pattern(self.graph, pattern)
-        graph_of_pattern.add_edges_from(edges)
-
-        w = self.quality_measure_aux(edges, metric)
-        subgroup = Pattern(pattern, graph_of_pattern, w)
-
-        mean, std = self.statistical_validation(self.n_samples, interval=len(list(self.graph.edges())),
-                                                pattern_size=len(edges), metric=metric)
-
-        subgroup.quality = (subgroup.weight - mean) / std
-
-        return subgroup
-
-    def quality_measure_s_aux(self, edges, metric):
+    def measure_score_s(self, edges, metric):
         nodes = set()
         weights = []
         for e in edges:
             nodes = nodes | {e[0], e[1]}
             weights += [e[2]['weight']]
-        num_edges_in_pattern = (len(nodes) * 1.0)  # number of nodes covered by a pattern P
-        max_num_edges = num_edges_in_pattern * (num_edges_in_pattern - 1)  # number of all possible edges
+        num_nodes_in_pattern = (len(nodes) * 1.0)  # number of nodes covered by a pattern P
+        max_num_edges = num_nodes_in_pattern * (num_nodes_in_pattern - 1)  # number of all possible edges
 
         if max_num_edges == 0:
             quality = 0
         else:
             if self.multi:
-                max_num_edges += self.count_edges(self.graph, nodes)
+                max_num_edges += self.count_edges(nodes)
             mean = sum(weights) / max_num_edges
             if metric == 'mean':
                 quality = mean
             elif metric == 'var':
+                # TODO: Check if makes sense to divide by the number of edges
                 var = sum((np.array(weights) - mean) ** 2) / max_num_edges
                 quality = var
         return quality
 
     @staticmethod
-    def quality_measure_p_aux(edges, metric='mean'):
+    def measure_score_p(edges, metric='mean'):
         weights = [e[2]['weight'] for e in edges]
 
         if metric == 'mean':
@@ -231,11 +208,10 @@ class GraphSDMining(object):
             quality = np.var(weights)
         return quality
 
-    @staticmethod
-    def get_edges_in_pattern(graph, pattern):
+    def get_edges_in_pattern(self, pattern) -> list:
         edges = []
 
-        for edge in list(graph.edges(data=True)):
+        for edge in list(self.graph.edges(data=True)):
             edge_in_pattern = True
             for sel in pattern:
                 if edge[2][sel.attribute] != sel.value:
@@ -248,7 +224,7 @@ class GraphSDMining(object):
         return edges
 
     @staticmethod
-    def count_edges(graph, nodes):
+    def count_edges(self, nodes):
         """
 
         This used to be called function 'm'
@@ -259,7 +235,7 @@ class GraphSDMining(object):
         for node1 in nodes:
             for node2 in nodes:
                 if node1 != node2:
-                    count += (graph.number_of_edges(node1, node2) - 1)
+                    count += (self.graph.number_of_edges(node1, node2) - 1)
         return count
 
 
@@ -312,6 +288,7 @@ class DigraphSDMining(GraphSDMining):
         graph.add_weighted_edges_from(getWEdges(counter))
 
         self.graph = graph
+        self.graph.max_edges = self.graph.number_of_nodes() * (self.graph.number_of_nodes() - 1)
 
     def _get_transactions(self, mode):
         transactions = set_attributes_diedges(self.graph, self.social_data, mode=mode)
@@ -366,6 +343,8 @@ class MultiDigraphSDMining(GraphSDMining):
         graph.add_weighted_edges_from(counter)
 
         self.graph = graph
+        self.graph.max_edges = self.graph.number_of_nodes() * (self.graph.number_of_nodes() - 1)
+        self.graph.max_edges += self.count_edges(self.graph.nodes)
 
     def _get_transactions(self, mode):
         transactions = set_attributes_multi_diedges(self.graph, self.social_data, mode=mode)
