@@ -97,7 +97,3 @@ if __name__ ==  '__main__':
     tQ = treeQuality_nodes(areas, itemsets, 'area')
     tQ.sort(reverse=True)
     infoPats_nodes(tQ,areas).to_csv('output/playgroundA_outlier_sd_area.csv', index=True)
-
-
-
-    

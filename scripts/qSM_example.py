@@ -5,8 +5,8 @@ from graphsd.utils import make_bins, to_dataframe
 
 if __name__ == '__main__':
 
-    position_data = pd.read_csv("position_data_anonymized.csv")
-    social_data = pd.read_csv("social_data_anonymized.csv")
+    position_data = pd.read_csv("../position_data_anonymized.csv")
+    social_data = pd.read_csv("../social_data_anonymized.csv")
     social_data = make_bins(social_data)
 
     mdgm = MultiDigraphSDMining(random_state=1234, n_jobs=3, n_samples=100)

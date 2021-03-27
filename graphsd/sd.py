@@ -1,154 +1,157 @@
-import numpy as np
-import pandas as pd
-import networkx as nx
-import multiprocessing as mp
 from multiprocessing.dummy import Pool as ThreadPool
+from networkx import Graph, DiGraph, MultiGraph, MultiDiGraph
 
 from graphsd.graph import *
 
 
-def edgesOfP(G, P):
-    edges = []
-
-    for e in list(G.edges(data=True)):
-        eInP = True
-        for sel in P:
-            if e[2][sel.attribute] != sel.value:
-                eInP = False
-                break
-
-        if eInP:
-            edges.append(e)
-
-    return edges
-
-
-def m(G, nodes):
-    count = 0
-    for n1 in nodes:
-        for n2 in nodes:
-            if n1 != n2:
-                count += (G.number_of_edges(n1, n2) - 1)
-    return count
-
-
-def qSaux(G, edges, multi, metric='mean'):
-    nodes = set()
-    weights = []
-    for e in edges:
-        nodes = nodes | {e[0], e[1]}
-        weights += [e[2]['weight']]
-    nEp = (len(nodes) * 1.0)  # number of nodes covered by a pattern P
-    nE = nEp * (nEp - 1)  # number of all possible edges
-
-    if nE == 0:
-        w = 0
-    else:
-        if multi is True:
-            nE += m(G, nodes)
-        mean = sum(weights) / nE
-        if metric == 'mean':
-            w = mean
-        elif metric == 'var':
-            var = sum(abs(np.array(weights) - mean) ** 2) / nE
-            w = var
-    return w
+# def edges_in_pattern(graph, pattern):
+#     edges = []
+#
+#     for edge in list(graph.edges(data=True)):
+#         edge_in_pattern = True
+#         for sel in pattern:
+#             if edge[2][sel.attribute] != sel.value:
+#                 edge_in_pattern = False
+#                 break
+#
+#         if edge_in_pattern:
+#             edges.append(e)
+#
+#     return edges
+#
+#
+# def count_edges(graph, nodes):
+#     """
+#
+#     This used to be called function 'm'
+#
+#     """
+#
+#     count = 0
+#     for node1 in nodes:
+#         for node2 in nodes:
+#             if node1 != node2:
+#                 count += (graph.number_of_edges(node1, node2) - 1)
+#     return count
 
 
-def qS(G, P, nsamples, metric='mean'):
+# def qSaux(graph, edges, multi, metric='mean'):
+#     nodes = set()
+#     weights = []
+#     for e in edges:
+#         nodes = nodes | {e[0], e[1]}
+#         weights += [e[2]['weight']]
+#     num_edges_in_pattern = (len(nodes) * 1.0)  # number of nodes covered by a pattern P
+#     max_num_edges = num_edges_in_pattern * (num_edges_in_pattern - 1)  # number of all possible edges
+#
+#     if max_num_edges == 0:
+#         quality = 0
+#     else:
+#         if multi is True:
+#             max_num_edges += count_edges(graph, nodes)
+#         mean = sum(weights) / max_num_edges
+#         if metric == 'mean':
+#             quality = mean
+#         elif metric == 'var':
+#             var = sum((np.array(weights) - mean) ** 2) / max_num_edges
+#             quality = var
+#     return quality
+#
+#
+# def qS(graph, pattern, n_samples, metric='mean'):
+#
+#     multi = False
+#     totalE = graph.number_of_nodes() * (graph.number_of_nodes() - 1)
+#
+#     if isinstance(graph, Graph):
+#         graph_pattern = Graph()
+#     elif type(graph) == DiGraph:
+#         graph_pattern = DiGraph()
+#     elif type(graph) == MultiGraph:
+#         graph_pattern = MultiGraph()
+#         multi = True
+#         totalE += count_edges(graph, graph.nodes)
+#     elif type(graph) == MultiDiGraph:
+#         graph_pattern = MultiDiGraph()
+#         multi = True
+#         totalE += count_edges(graph, graph.nodes)
+#
+#     edges = edges_in_pattern(graph, pattern)
+#     graph_pattern.add_edges_from(edges)
+#
+#     weight = qSaux(graph, edges, multi, metric)
+#
+#     pat = Pattern(pattern, graph_pattern, weight)
+#
+#     sample = []
+#
+#     pool = ThreadPool(2)
+#
+#     for r in range(n_samples):
+#         indexes = np.random.choice(range(totalE), len(edges), replace=False)
+#         random_edges = [list(graph.edges(data=True))[i] for i in indexes if i < len(list(graph.edges()))]
+#         pool.apply_async(qSaux, args=(graph, random_edges, multi, metric), callback=sample.append)
+#
+#     pool.close()
+#     pool.join()
+#
+#     mean = np.mean(sample)
+#     std = np.std(sample)
+#
+#     pat.quality = (pat.weight - mean) / std
+#
+#     return pat
 
-    multi = False
-    totalE = G.number_of_nodes() * (G.number_of_nodes() - 1)
 
-    if type(G) == nx.Graph:
-        Gpattern = nx.Graph()
-    elif type(G) == nx.DiGraph:
-        Gpattern = nx.DiGraph()
-    elif type(G) == nx.MultiGraph:
-        Gpattern = nx.MultiGraph()
-        multi = True
-        totalE += m(G, G.nodes)
-    elif type(G) == nx.MultiDiGraph:
-        Gpattern = nx.MultiDiGraph()
-        multi = True
-        totalE += m(G, G.nodes)
-
-    edges = edgesOfP(G, P)
-    Gpattern.add_edges_from(edges)
-
-    w = qSaux(G, edges, multi, metric)
-
-    pat = Pattern(P, Gpattern, w)
-
-    sample = []
-
-    pool = ThreadPool(2)
-
-    for r in range(nsamples):
-        indxs = np.random.choice(range(totalE), len(edges), replace=False)
-        randomE = [list(G.edges(data=True))[i] for i in indxs if i < len(list(G.edges()))]
-        pool.apply_async(qSaux, args=(G, randomE, multi, metric), callback=sample.append)
-
-    pool.close()
-    pool.join()
-
-    mean = np.mean(sample)
-    std = np.std(sample)
-
-    pat.quality = (pat.weight - mean) / std
-
-    return pat
+# def qPaux(edges, metric='mean'):
+#     weights = [e[2]['weight'] for e in edges]
+#
+#     if metric == 'mean':
+#         quality = np.mean(weights)
+#     elif metric == 'var':
+#         quality = np.var(weights)
+#     return quality
 
 
-def qPaux(edges, metric='mean'):
-    weights = [e[2]['weight'] for e in edges]
-
-    if metric == 'mean':
-        w = np.mean(weights)
-    elif metric == 'var':
-        w = np.var(weights)
-    return w
-
-
-def qP(G, P, nsamples, metric='mean'):
-    edges = edgesOfP(G, P)
-    multi = False
-
-    if type(G) == nx.Graph:
-        Gpattern = nx.Graph()
-    elif type(G) == nx.DiGraph:
-        Gpattern = nx.DiGraph()
-    elif type(G) == nx.MultiGraph:
-        Gpattern = nx.MultiGraph()
-        multi = True
-    elif type(G) == nx.MultiDiGraph:
-        Gpattern = nx.MultiDiGraph()
-        multi = True
-
-    Gpattern.add_edges_from(edges)
-
-    w = qPaux(edges, metric)
-    pat = Pattern(P, Gpattern, w)
-
-    sample = []
-
-    pool = ThreadPool(2)
-
-    for r in range(nsamples):
-        print("sample:", r)
-        indxs = np.random.choice(range(len(list(G.edges()))), len(list(pat.graph.edges())), replace=False)
-        randomE = [list(G.edges(data=True))[i] for i in indxs]
-        pool.apply_async(qPaux, args=(randomE, metric), callback=sample.append)
-
-    pool.close()
-    pool.join()
-
-    mean = np.mean(sample)
-    std = np.std(sample)
-
-    pat.quality = (pat.weight - mean) / std
-
-    return pat
+# def qP(graph, pattern, nsamples, metric='mean'):
+#     edges = edges_in_pattern(graph, pattern)
+#     multi = False
+#
+#     if type(graph) == Graph:
+#         Gpattern = Graph()
+#     elif type(graph) == DiGraph:
+#         Gpattern = DiGraph()
+#     elif type(graph) == MultiGraph:
+#         Gpattern = MultiGraph()
+#         multi = True
+#     elif type(graph) == MultiDiGraph:
+#         Gpattern = MultiDiGraph()
+#         multi = True
+#
+#     Gpattern.add_edges_from(edges)
+#
+#     w = qPaux(edges, metric)
+#     pat = Pattern(pattern, Gpattern, w)
+#
+#     sample = []
+#
+#     pool = ThreadPool(2)
+#
+#     for r in range(nsamples):
+#         print("sample:", r)
+#         indxs = np.random.choice(range(len(list(graph.edges()))), len(list(pat.graph.edges())), replace=False)
+#         randomE = [list(graph.edges(data=True))[i] for i in indxs]
+#         pool.apply_async(qPaux, args=(randomE, metric), callback=sample.append)
+#
+#     pool.close()
+#     pool.join()
+#
+#     mean = np.mean(sample)
+#     std = np.std(sample)
+#
+#     pat.quality = (pat.weight - mean) / std
+#
+#     return pat
 
 
 ##############################

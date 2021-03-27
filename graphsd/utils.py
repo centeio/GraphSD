@@ -1,8 +1,6 @@
 import math
 import pandas as pd
 
-from orangecontrib.associate.fpgrowth import *
-
 
 class NominalSelector:
     def __init__(self, attribute, value):
@@ -28,7 +26,6 @@ class NominalSelector:
         return hash(str(self))
 
 
-# This class should be renamed to Subgroup
 class Pattern:
     def __init__(self, name, graph, weight):  # name has to be of type list of NominalSelector
         self.name = name
@@ -73,8 +70,11 @@ def make_bins(dataframe, n_bins=3):
     columns = dataframe.drop(['id'], axis=1)._get_numeric_data().columns
 
     for c in columns:
-        #         dataframe[c] = pd.qcut(dataframe[c], n_bins, labels = range(n_bins))
-        dataframe[c] = get_bins(dataframe[c].values, n_bins)
+        if isinstance(n_bins, int):
+            dataframe[c] = get_bins(dataframe[c].values, n_bins)
+        elif isinstance(n_bins, list):
+            dataframe[c] = pd.qcut(dataframe[c], len(n_bins), labels=n_bins)
+
     return dataframe
 
 
@@ -130,12 +130,8 @@ def getBins2(numBins, data):
     return binList
 
 
-# def getZ(val, mean, std):
-#     return (val - mean)/std
-
-
-def get_z_score(val):
-    return (val - np.mean(val)) / np.std(val)
+# def get_z_score(val):
+#     return (val - np.mean(val)) / np.std(val)
 
 
 def addVelXY(dataframe):  # has to be sorted ascending by timestamp!!
@@ -169,37 +165,37 @@ def addVelXY(dataframe):  # has to be sorted ascending by timestamp!!
     return resdf
 
 
-def freqItemsets(transactions, prun=20):
-    intTransactionsDict = {}
-    last = 1
-    intT = []
-
-    for trans in transactions:
-        temp = []
-        for att in trans:
-            if att not in intTransactionsDict:
-                intTransactionsDict[att] = last
-                last += 1
-            temp += [intTransactionsDict[att]]
-        intT += [temp]
-
-    inv_intTransactionsDict = {v: k for k, v in intTransactionsDict.items()}
-
-    itemsets = list(frequent_itemsets(intT, prun))
-
-    newTransactions = {}
-    for fset, count in itemsets:
-        first = True
-        for n in fset:
-            if first:
-                temp = (inv_intTransactionsDict[n],)
-                first = False
-            else:
-                temp += (inv_intTransactionsDict[n],)
-
-        newTransactions[temp] = count
-
-    return newTransactions
+# def freqItemsets(transactions, prun=20):
+#     intTransactionsDict = {}
+#     last = 1
+#     intT = []
+#
+#     for trans in transactions:
+#         temp = []
+#         for att in trans:
+#             if att not in intTransactionsDict:
+#                 intTransactionsDict[att] = last
+#                 last += 1
+#             temp += [intTransactionsDict[att]]
+#         intT += [temp]
+#
+#     inv_intTransactionsDict = {v: k for k, v in intTransactionsDict.items()}
+#
+#     itemsets = list(frequent_itemsets(intT, prun))
+#
+#     newTransactions = {}
+#     for fset, count in itemsets:
+#         first = True
+#         for n in fset:
+#             if first:
+#                 temp = (inv_intTransactionsDict[n],)
+#                 first = False
+#             else:
+#                 temp += (inv_intTransactionsDict[n],)
+#
+#         newTransactions[temp] = count
+#
+#     return newTransactions
 
 
 def to_dataframe(subgroups):

@@ -1,20 +1,33 @@
 import matplotlib.pyplot as plt
 import networkx as nx
 
+
 def graphViz(graph, width=1):
-    ecolors = list(nx.get_edge_attributes(graph,'weight').values())
+    ecolors = list(nx.get_edge_attributes(graph, 'weight').values())
     pos = nx.circular_layout(graph)
     nx.draw(graph, pos, edge_color=ecolors,
-            width=4, edge_cmap=plt.cm.Blues, with_labels=True, cmap=plt.cm.Reds, figsize=(20,20))
+            width=4, edge_cmap=plt.cm.Blues, with_labels=True, cmap=plt.cm.Reds, figsize=(20, 20))
 
-    plt.figure(figsize=(5,5)) 
+    plt.figure(figsize=(5, 5))
     plt.show()
 
-def displayGender(graph, ids, socialData, shifth = 2, shiftv = 0, filtere=0, width = 1):
-    
-    #TODO debug filter edges
-    #if filtere != 0:
-    #   graph = graph.edge_subgraph(filterEdges(graph, filtere))
+
+def filterEdges(graph, n_bins):
+    subedges = []
+    weights_bins = get_bins(n_bins, [edict['weight'] for e1, e2, edict in list(graph.edges(data=True))])
+    i = 0
+    for eid in list(graph.edges()):
+        if weights_bins[i] == (n_bins - 1):
+            subedges += [eid]
+        i += 1
+    print(subedges)
+    return subedges
+
+
+def displayGender(graph, ids, socialData, shifth=2, shiftv=0, filter=0, width=1):
+    # TODO debug filter edges
+    # if filter != 0:
+    #   graph = graph.edge_subgraph(filterEdges(graph, filter))
     #   print(list(graph.edges(data=True)))
 
     subgraphF = graph.subgraph([nid for nid in ids if (socialData.query("id==@nid").Gender.item() == 'F')])
@@ -24,49 +37,49 @@ def displayGender(graph, ids, socialData, shifth = 2, shiftv = 0, filtere=0, wid
     posM = nx.circular_layout(subgraphM)
 
     for val in posF:
-            posF[val][0] = posF[val][0] - shifth
-            posF[val][1] = posF[val][1] - shiftv
+        posF[val][0] = posF[val][0] - shifth
+        posF[val][1] = posF[val][1] - shiftv
     for val in posM:
-            posM[val][0] = posM[val][0] + shifth
-            posM[val][1] = posM[val][1] + shiftv
-            
+        posM[val][0] = posM[val][0] + shifth
+        posM[val][1] = posM[val][1] + shiftv
+
     pos = {**posF, **posM}
 
-    ecolors = list(nx.get_edge_attributes(graph,'weight').values())
+    ecolors = list(nx.get_edge_attributes(graph, 'weight').values())
     ncolors = [0.4 if socialData.query("id==@nid").Gender.item() == 'F' else 0.5 for nid in ids]
 
-    nx.draw(graph, pos, node_color=ncolors, edge_color = ecolors,
-        width=width, edge_cmap=plt.cm.Blues, with_labels=True, cmap=plt.cm.Reds, figsize=(20,20))
+    nx.draw(graph, pos, node_color=ncolors, edge_color=ecolors,
+            width=width, edge_cmap=plt.cm.Blues, with_labels=True, cmap=plt.cm.Reds, figsize=(20, 20))
 
     plt.show()
 
-def attHist(attribute, value, bins = 5):
-    listedges = []
+
+def attHist(attribute, value, bins=5):
+    list_edges = []
     wsum = 0
     count = 0
 
     for nid1, nid2, edict in list(GComp.edges(data=True)):
         if edict[attribute] == value:
-            listedges += [edict['weight']] 
+            list_edges += [edict['weight']]
             wsum += edict['weight']
             count += 1
-            
-            
-    print('mean: ', wsum/count)
-            
-            
-    listedges
-    plt.hist(listedges, bins)
 
-def printpositions(dataset, ids, initialDate, finalDate): #colors in RGB 0-255
-    #cmapb = plt.cm.Blues
-    #cmapb = cmapb(list(nx.get_edge_attributes(G,'weight').values()))
+    print('mean: ', wsum / count)
+
+    list_edges
+    plt.hist(list_edges, bins)
+
+
+def printpositions(dataset, ids, initialDate, finalDate):  # colors in RGB 0-255
+    # cmapb = plt.cm.Blues
+    # cmapb = cmapb(list(nx.get_edge_attributes(G,'weight').values()))
     cmapr = plt.cm.Reds
     weights = list(range(len(ids)))
     max_id = max(weights)
-    rangec = [x/max_id for x in weights]
+    rangec = [x / max_id for x in weights]
     ncolor = cmapr(rangec)
-    
+
     dates = []
 
     start_window = pd.Timestamp(initialDate)
@@ -74,13 +87,13 @@ def printpositions(dataset, ids, initialDate, finalDate): #colors in RGB 0-255
 
     while start_window <= pd.Timestamp(finalDate):
         dates += [str(start_window)]
-        #coords = after18[str(start_window)][['id','x','y']].set_index("id").reindex(ids).reset_index()[['x','y']]
-        #compute distances
+        # coords = after18[str(start_window)][['id','x','y']].set_index("id").reindex(ids).reset_index()[['x','y']]
+        # compute distances
         # np.nan_to_num(dists)
-        start_window = start_window + pd.Timedelta(seconds = nseconds)
+        start_window = start_window + pd.Timedelta(seconds=nseconds)
 
     start_window = pd.Timestamp(initialDate)
-    
+
     # make figure
     figure = {
         'data': [],
@@ -89,7 +102,7 @@ def printpositions(dataset, ids, initialDate, finalDate): #colors in RGB 0-255
     }
 
     # fill in most of layout
-    #figure['layout']['xaxis'] = {'range': [30, 85], 'title': 'X'}
+    # figure['layout']['xaxis'] = {'range': [30, 85], 'title': 'X'}
     figure['layout']['xaxis'] = {'title': 'X'}
     figure['layout']['yaxis'] = {'title': 'Y'}
     figure['layout']['hovermode'] = 'closest'
@@ -110,13 +123,14 @@ def printpositions(dataset, ids, initialDate, finalDate): #colors in RGB 0-255
             'buttons': [
                 {
                     'args': [None, {'frame': {'duration': 500, 'redraw': False},
-                             'fromcurrent': True, 'transition': {'duration': 300, 'easing': 'quadratic-in-out'}}],
+                                    'fromcurrent': True,
+                                    'transition': {'duration': 300, 'easing': 'quadratic-in-out'}}],
                     'label': 'Play',
                     'method': 'animate'
                 },
                 {
                     'args': [[None], {'frame': {'duration': 0, 'redraw': False}, 'mode': 'immediate',
-                    'transition': {'duration': 0}}],
+                                      'transition': {'duration': 0}}],
                     'label': 'Pause',
                     'method': 'animate'
                 }
@@ -156,7 +170,6 @@ def printpositions(dataset, ids, initialDate, finalDate): #colors in RGB 0-255
         dataset_by_ts = dataset[str(start_window)].set_index("id").reindex(ids).reset_index()
         dataset_by_ts_and_id = dataset_by_ts[dataset_by_ts['id'] == nid]
 
-
         data_dict = {
             'x': list(dataset_by_ts_and_id['x']),
             'y': list(dataset_by_ts_and_id['y']),
@@ -166,7 +179,8 @@ def printpositions(dataset, ids, initialDate, finalDate): #colors in RGB 0-255
                 'sizemode': 'area',
                 'sizeref': 200000,
                 'size': 10,
-                'color': 'rgb('+ str(round(ncolor[colcounter][0]*255)) + ',' + str(round(ncolor[colcounter][1]*255)) + ',' + str(round(ncolor[colcounter][2]*255)) + ')'
+                'color': 'rgb(' + str(round(ncolor[colcounter][0] * 255)) + ',' + str(
+                    round(ncolor[colcounter][1] * 255)) + ',' + str(round(ncolor[colcounter][2] * 255)) + ')'
             },
             'name': nid
         }
@@ -176,7 +190,7 @@ def printpositions(dataset, ids, initialDate, finalDate): #colors in RGB 0-255
     # make frames
     for ts in dates:
         frame = {'data': [], 'name': str(ts)}
-        
+
         colcounter = 0
         for nid in ids:
             dataset_by_ts = dataset[ts].set_index("id").reindex(ids).reset_index()
@@ -191,7 +205,8 @@ def printpositions(dataset, ids, initialDate, finalDate): #colors in RGB 0-255
                     'sizemode': 'area',
                     'sizeref': 200000,
                     'size': 10,
-                    'color': 'rgb('+ str(round(ncolor[colcounter][0]*255)) + ',' + str(round(ncolor[colcounter][1]*255)) + ',' + str(round(ncolor[colcounter][2]*255)) + ')'
+                    'color': 'rgb(' + str(round(ncolor[colcounter][0] * 255)) + ',' + str(
+                        round(ncolor[colcounter][1] * 255)) + ',' + str(round(ncolor[colcounter][2] * 255)) + ')'
                 },
                 'name': nid
             }
@@ -203,19 +218,18 @@ def printpositions(dataset, ids, initialDate, finalDate): #colors in RGB 0-255
             [ts],
             {'frame': {'duration': 200, 'redraw': False},
              'mode': 'immediate',
-           'transition': {'duration': 200}}
-         ],
-         'label': ts,
-         'method': 'animate'}
+             'transition': {'duration': 200}}
+        ],
+            'label': ts,
+            'method': 'animate'}
         sliders_dict['steps'].append(slider_step)
-        
-
 
     figure['layout']['sliders'] = [sliders_dict]
 
     iplot(figure)
 
-def printpositionsG(G, initialDate, finalDate): #colors in RGB 0-255
+
+def printpositionsG(G, initialDate, finalDate):  # colors in RGB 0-255
     cmapb = plt.cm.Blues
     cmapb = cmapb(list((socialData.set_index("id").reindex(ids).Gender == 'F') + 0))
     gender = socialData.set_index("id").reindex(ids).Gender
@@ -227,11 +241,10 @@ def printpositionsG(G, initialDate, finalDate): #colors in RGB 0-255
 
     while start_window <= pd.Timestamp(finalDate):
         dates += [str(start_window)]
-        #coords = after18[str(start_window)][['id','x','y']].set_index("id").reindex(ids).reset_index()[['x','y']]
-        #compute distances
+        # coords = after18[str(start_window)][['id','x','y']].set_index("id").reindex(ids).reset_index()[['x','y']]
+        # compute distances
         # np.nan_to_num(dists)
-        start_window = start_window + pd.Timedelta(seconds = nseconds)
-
+        start_window = start_window + pd.Timedelta(seconds=nseconds)
 
     # make figure
     figure = {
@@ -241,7 +254,7 @@ def printpositionsG(G, initialDate, finalDate): #colors in RGB 0-255
     }
 
     # fill in most of layout
-    #figure['layout']['xaxis'] = {'range': [30, 85], 'title': 'X'}
+    # figure['layout']['xaxis'] = {'range': [30, 85], 'title': 'X'}
     figure['layout']['xaxis'] = {'title': 'X'}
     figure['layout']['yaxis'] = {'title': 'Y'}
     figure['layout']['hovermode'] = 'closest'
@@ -262,13 +275,14 @@ def printpositionsG(G, initialDate, finalDate): #colors in RGB 0-255
             'buttons': [
                 {
                     'args': [None, {'frame': {'duration': 500, 'redraw': False},
-                             'fromcurrent': True, 'transition': {'duration': 300, 'easing': 'quadratic-in-out'}}],
+                                    'fromcurrent': True,
+                                    'transition': {'duration': 300, 'easing': 'quadratic-in-out'}}],
                     'label': 'Play',
                     'method': 'animate'
                 },
                 {
                     'args': [[None], {'frame': {'duration': 0, 'redraw': False}, 'mode': 'immediate',
-                    'transition': {'duration': 0}}],
+                                      'transition': {'duration': 0}}],
                     'label': 'Pause',
                     'method': 'animate'
                 }
@@ -308,7 +322,6 @@ def printpositionsG(G, initialDate, finalDate): #colors in RGB 0-255
         dataset_by_ts = after18[str(start_window)].set_index("id").reindex(ids).reset_index()
         dataset_by_ts_and_id = dataset_by_ts[dataset_by_ts['id'] == nid]
 
-
         data_dict = {
             'x': list(dataset_by_ts_and_id['x']),
             'y': list(dataset_by_ts_and_id['y']),
@@ -318,7 +331,8 @@ def printpositionsG(G, initialDate, finalDate): #colors in RGB 0-255
                 'sizemode': 'area',
                 'sizeref': 200000,
                 'size': 10,
-                'color': 'rgb('+ str(round(colors[colcounter][0]*255)) + ',' + str(round(colors[colcounter][1]*255)) + ',' + str(round(colors[colcounter][2]*255)) + ')'
+                'color': 'rgb(' + str(round(colors[colcounter][0] * 255)) + ',' + str(
+                    round(colors[colcounter][1] * 255)) + ',' + str(round(colors[colcounter][2] * 255)) + ')'
             },
             'name': nid
         }
@@ -328,7 +342,7 @@ def printpositionsG(G, initialDate, finalDate): #colors in RGB 0-255
     # make frames
     for ts in dates:
         frame = {'data': [], 'name': str(ts)}
-        
+
         colcounter = 0
         for nid in ids:
             dataset_by_ts = after18[ts].set_index("id").reindex(ids).reset_index()
@@ -343,7 +357,8 @@ def printpositionsG(G, initialDate, finalDate): #colors in RGB 0-255
                     'sizemode': 'area',
                     'sizeref': 200000,
                     'size': 10,
-                    'color': 'rgb('+ str(round(colors[colcounter][0]*255)) + ',' + str(round(colors[colcounter][1]*255)) + ',' + str(round(colors[colcounter][2]*255)) + ')'
+                    'color': 'rgb(' + str(round(colors[colcounter][0] * 255)) + ',' + str(
+                        round(colors[colcounter][1] * 255)) + ',' + str(round(colors[colcounter][2] * 255)) + ')'
                 },
                 'name': nid
             }
@@ -355,13 +370,11 @@ def printpositionsG(G, initialDate, finalDate): #colors in RGB 0-255
             [ts],
             {'frame': {'duration': 50, 'redraw': False},
              'mode': 'immediate',
-           'transition': {'duration': 1}}
-         ],
-         'label': ts,
-         'method': 'animate'}
+             'transition': {'duration': 1}}
+        ],
+            'label': ts,
+            'method': 'animate'}
         sliders_dict['steps'].append(slider_step)
-        
-
 
     figure['layout']['sliders'] = [sliders_dict]
 
