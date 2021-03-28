@@ -130,10 +130,6 @@ def getBins2(numBins, data):
     return binList
 
 
-# def get_z_score(val):
-#     return (val - np.mean(val)) / np.std(val)
-
-
 def addVelXY(dataframe):  # has to be sorted ascending by timestamp!!
     first = True
     ids = dataframe.id.unique()
@@ -198,6 +194,7 @@ def addVelXY(dataframe):  # has to be sorted ascending by timestamp!!
 #     return newTransactions
 
 
+# Only works for bi directional graphs
 def to_dataframe(subgroups):
     col_names = ['Pattern', 'Nodes', 'in', 'out', 'Edges', 'Mean Weight', 'Score']
     dataframe = pd.DataFrame(columns=col_names)

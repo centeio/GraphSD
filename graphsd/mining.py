@@ -3,14 +3,14 @@ from multiprocessing.dummy import Pool as ThreadPool
 
 import numpy as np
 from networkx import Graph, DiGraph, MultiGraph, MultiDiGraph
+import networkx as nx
 from orangecontrib.associate.fpgrowth import frequent_itemsets
 
-from graphsd.graph import count_interactions_digraph, count_interactions_multi_digraph, \
-    set_attributes_diedges, getWEdges, set_attributes_multi_diedges
-from graphsd.utils import Pattern, addVelXY
+from graphsd.graph import count_interactions_digraph, count_interactions_multi_digraph, count_interactions, getWEdges
+from graphsd.utils import Pattern, addVelXY, NominalSelector
 
 
-class GraphSDMining(object):
+class GraphSDMiningBase(object):
 
     def __init__(self,
                  n_bins=3,
@@ -28,7 +28,6 @@ class GraphSDMining(object):
         self.n_jobs = n_jobs
 
         self.graph = None
-        self.transactions = None
         self.social_data = None
 
         self.graph_type = None
@@ -75,7 +74,7 @@ class GraphSDMining(object):
         # TODO: random_state is not working
         np.random.seed(self.random_state)
         transactions = self._get_transactions(mode)
-        frequent_items = self.get_frequent_items(transactions, min_support)
+        frequent_itemset = self.get_frequent_items(transactions, min_support)
 
         if quality_measure in ['qP', 'qS']:
             quality_function = self.quality_measure_base
@@ -89,14 +88,14 @@ class GraphSDMining(object):
         if self.n_jobs > 1:
             pool = Pool(self.n_jobs)
             subgroups = []
-            for k, _ in frequent_items.items():
-                pool.apply_async(quality_function, args=(k, metric, quality_measure),
+            for frequent_items, _ in frequent_itemset.items():
+                pool.apply_async(quality_function, args=(frequent_items, metric, quality_measure),
                                  callback=subgroups.append)
             pool.close()
             pool.join()
         else:
-            subgroups = [quality_function(k, metric=metric, measure_type=quality_measure)
-                         for k, _ in frequent_items.items()]
+            subgroups = [quality_function(frequent_items, metric=metric, measure_type=quality_measure)
+                         for frequent_items, _ in frequent_itemset.items()]
 
         subgroups.sort(reverse=True)
 
@@ -142,6 +141,7 @@ class GraphSDMining(object):
         max_n_edges
         pattern_size
         metric
+        max_pattern_edges
 
         Returns
         -------
@@ -243,7 +243,7 @@ class GraphSDMining(object):
         return count
 
 
-class DigraphSDMining(GraphSDMining):
+class DigraphSDMining(GraphSDMiningBase):
 
     def __init__(self,
                  n_bins=3,
@@ -270,7 +270,6 @@ class DigraphSDMining(GraphSDMining):
         self.n_jobs = n_jobs
 
         self.graph = None
-        self.transactions = None
         self.social_data = None
 
         self.graph_type = "digraph"
@@ -295,12 +294,51 @@ class DigraphSDMining(GraphSDMining):
         self.graph.max_edges = self.graph.number_of_nodes() * (self.graph.number_of_nodes() - 1)
 
     def _get_transactions(self, mode):
-        transactions = set_attributes_diedges(self.graph, self.social_data, mode=mode)
-        self.transactions = transactions
+        transactions = self.set_attributes(mode=mode)
+        return transactions
+
+    def set_attributes(self, signed_graph=None, mode="comparison"):
+        attributes = self.social_data.drop(['id'], axis=1).columns
+
+        attr = {}
+        transactions = []
+
+        for edge1, edge2 in list(self.graph.edges()):
+            tr = []
+            edge_attr = {}
+            for att in attributes:
+                if mode == "to":
+                    edge_attr[att] = self.social_data[self.social_data.id == edge2][att].item()
+                elif mode == "from":
+                    edge_attr[att] = self.social_data[self.social_data.id == edge1][att].item()
+                elif mode == "comparison":
+                    if isinstance(self.social_data[self.social_data.id == edge1][att].item(), str):
+                        edge_attr[att] = str((self.social_data[self.social_data.id == edge1][att].item(),
+                                              self.social_data[self.social_data.id == edge2][att].item()))
+                    elif self.social_data[self.social_data.id == edge1][att].item() == \
+                            self.social_data[self.social_data.id == edge2][att].item():
+                        edge_attr[att] = "EQ"
+                    elif self.social_data[self.social_data.id == edge1][att].item() > \
+                            self.social_data[self.social_data.id == edge2][att].item():
+                        edge_attr[att] = ">"
+                    else:
+                        edge_attr[att] = "<"
+
+                tr.append(NominalSelector(att, edge_attr[att]))
+
+            if signed_graph is not None:
+                if not signed_graph.has_edge(edge1, edge2):
+                    edge_attr['weight'] = 0
+
+            attr[(edge1, edge2)] = edge_attr
+            transactions.append(tr)
+
+        nx.set_edge_attributes(self.graph, attr)
+
         return transactions
 
 
-class MultiDigraphSDMining(GraphSDMining):
+class MultiDigraphSDMining(GraphSDMiningBase):
     def __init__(self,
                  n_bins=3,
                  n_samples=100,
@@ -325,7 +363,6 @@ class MultiDigraphSDMining(GraphSDMining):
         self.n_jobs = n_jobs
 
         self.graph = None
-        self.transactions = None
         self.social_data = None
 
         self.multi = True
@@ -348,10 +385,130 @@ class MultiDigraphSDMining(GraphSDMining):
 
         self.graph = graph
         self.graph.max_edges = self.graph.number_of_nodes() * (self.graph.number_of_nodes() - 1)
-        # TODO: Estimating the max edges of a multi graph is not simple
+        # TODO: Estimating the max edges of a multi graph is not 100% correct
         self.graph.max_edges += self.count_edges(self.graph)
 
     def _get_transactions(self, mode):
-        transactions = set_attributes_multi_diedges(self.graph, self.social_data, mode=mode)
-        self.transactions = transactions
+        transactions = self.set_attributes(mode=mode)
+        return transactions
+
+    def set_attributes(self, signed_graph=None, mode="comparison"):
+
+        attributes = self.social_data.drop(['id'], axis=1).columns
+
+        transactions = []
+        i = 0
+        for nid1, nid2, ekey, edict in list(self.graph.edges(keys=True, data=True)):
+            tr = []
+            # edge_attr = {}
+            for att in attributes:
+                if mode == "to":
+                    edict[att] = self.social_data[self.social_data.id == nid2][att].item()
+                elif mode == "from":
+                    edict[att] = self.social_data[self.social_data.id == nid1][att].item()
+                elif mode == "comparison":
+                    if isinstance(self.social_data[self.social_data.id == nid1][att].item(), str):
+                        edict[att] = str(
+                            (self.social_data[self.social_data.id == nid1][att].item(),
+                             self.social_data[self.social_data.id == nid2][att].item()))
+                    elif self.social_data[self.social_data.id == nid1][att].item() == \
+                            self.social_data[self.social_data.id == nid2][att].item():
+                        # edge_attr[att] = "EQ"
+                        edict[att] = "EQ"
+                    elif self.social_data[self.social_data.id == nid1][att].item() > \
+                            self.social_data[self.social_data.id == nid2][att].item():
+                        # edge_attr[att] = ">"
+                        edict[att] = ">"
+                    else:
+                        # edge_attr[att] = "<"
+                        edict[att] = "<"
+                tr.append(NominalSelector(att, edict[att]))
+
+            # attr[e] = edge_attr
+            transactions.append(tr)
+            i += 1
+
+            if signed_graph is not None:
+                if not signed_graph.has_edge(nid1, nid2):
+                    edict['weight'] = 0
+
+        # nx.set_edge_attributes(G, attr)
+        return transactions
+
+
+class GraphSDMining(GraphSDMiningBase):
+
+    def __init__(self,
+                 n_bins=3,
+                 n_samples=100,
+                 metric='mean',
+                 random_state=None,
+                 n_jobs=1
+                 ):
+        super().__init__(
+            n_bins=n_bins,
+            n_samples=n_samples,
+            metric=metric,
+            random_state=random_state,
+            n_jobs=n_jobs
+        )
+
+        self.n_bins = n_bins
+        self.n_samples = n_samples
+        self.metric = metric
+        self.random_state = random_state
+        self.n_jobs = n_jobs
+
+        self.graph = None
+        self.social_data = None
+
+        self.graph_type = "digraph"
+
+    def read_data(self, position_data, social_data, time_step=10):
+
+        counter = count_interactions(position_data, proximity=1, time_step=time_step)
+        ids = position_data.id.unique()
+
+        self._create_graph(counter, ids)
+        self.social_data = social_data
+
+        return counter
+
+    def _create_graph(self, counter, ids):
+        graph = Graph()
+        graph.add_nodes_from(ids)
+        graph.add_weighted_edges_from(counter)
+
+        self.graph = graph
+        self.graph.max_edges = (self.graph.number_of_nodes() * (self.graph.number_of_nodes() - 1)) / 2
+
+    def _get_transactions(self, mode=None):
+        transactions = self.set_attributes()
+        return transactions
+
+    def set_attributes(self, signed_graph=None):
+        attributes = self.social_data.drop(['id'], axis=1).columns
+
+        attr = {}
+        transactions = []
+
+        for nid1, nid2 in list(self.graph.edges()):
+            tr = []
+            edge_attr = {}
+            for att in attributes:
+                if self.social_data[self.social_data.id == nid1][att].item() == \
+                        self.social_data[self.social_data.id == nid2][att].item():
+                    edge_attr[att] = "EQ"
+                else:
+                    edge_attr[att] = "NEQ"
+                tr.append(NominalSelector(att, edge_attr[att]))
+
+            if signed_graph is not None:
+                if not signed_graph.has_edge(nid1, nid2):
+                    edge_attr['weight'] = 0
+
+            attr[(nid1, nid2)] = edge_attr
+            transactions.append(tr)
+
+        nx.set_edge_attributes(self.graph, attr)
         return transactions
