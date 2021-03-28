@@ -1,8 +1,5 @@
-import numpy as np
-import pandas as pd
-
-from graphsd.sd import *
-from process_data import load_data
+from graphsd.graph import *
+from scripts.process_data import load_data
 
 np.random.seed(1234)
 
