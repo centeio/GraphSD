@@ -10,7 +10,7 @@ from graphSD.sd import *
 
 np.random.seed(1234)
 
-if __name__ ==  '__main__':
+if __name__ == '__main__':
 
     socialData = pd.read_csv('./data/socialData_ad2.csv', dtype={'id':str})
 
