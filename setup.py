@@ -21,7 +21,9 @@ LICENSE = 'new BSD'
 DOWNLOAD_URL = 'https://github.com/centeio/GraphSD'
 VERSION = __version__
 INSTALL_REQUIRES = ['pandas',
-                    'numpy']
+                    'numpy',
+                    'orangecontrib3',
+                    'scipy']
 CLASSIFIERS = ['Intended Audience :: Science/Research',
                'Intended Audience :: Developers',
                'License :: OSI Approved',
