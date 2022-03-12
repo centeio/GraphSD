@@ -71,7 +71,7 @@ def make_bins(dataframe, n_bins=3):
 
     for c in columns:
         if isinstance(n_bins, int):
-            dataframe[c] = get_bins(dataframe[c].values, n_bins)
+            dataframe[c] = get_bins_2(dataframe[c].values, n_bins)
         elif isinstance(n_bins, list):
             dataframe[c] = pd.qcut(dataframe[c], len(n_bins), labels=n_bins)
 
@@ -103,8 +103,8 @@ def get_bins(data, n_bins=3):
     return binList
 
 
-def getBins2(numBins, data):
-    data_points_per_bin = math.ceil(len(data) / numBins)
+def get_bins_2(data, n_bins=3):
+    data_points_per_bin = math.ceil(len(data) / n_bins)
     sortedData = data.copy()
     sortedData.sort()
 
@@ -115,7 +115,7 @@ def getBins2(numBins, data):
         if data[el] == limitinf:
             binList[el] = 0
 
-    for j in range(numBins):
+    for j in range(n_bins):
         pos = data_points_per_bin * (j + 1) - 1
 
         if pos >= len(sortedData):
