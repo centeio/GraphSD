@@ -14,7 +14,7 @@ DESCRIPTION = "Mining graphs with Subgroup Discovery",
 LONG_DESCRIPTION = 'A package to look for unusual social interaction patterns with subgroup discovery.'
 # with codecs.open('README.rst', encoding='utf-8-sig') as f:
 #     LONG_DESCRIPTION = f.read()
-MAINTAINER = 'C. Centeio Jorge'
+MAINTAINER = 'C. Centeio Jorge & C. Rebelo Sa'
 MAINTAINER_EMAIL = 'c.jorge@tudelft.nl'
 URL = 'https://github.com/centeio/GraphSD'
 LICENSE = 'new BSD'
@@ -22,8 +22,9 @@ DOWNLOAD_URL = 'https://github.com/centeio/GraphSD'
 VERSION = __version__
 INSTALL_REQUIRES = ['pandas',
                     'numpy',
-                    'orangecontrib3',
-                    'scipy']
+                    'networkx',
+                    'scipy',
+                    'Orange3-Associate']
 CLASSIFIERS = ['Intended Audience :: Science/Research',
                'Intended Audience :: Developers',
                'License :: OSI Approved',
