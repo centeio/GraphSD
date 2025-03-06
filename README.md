@@ -4,9 +4,8 @@ We adapted an existing subgroup discovery technique to deal with spatio-temporal
 
 More information of the theory behind this code can be found on *Mining Exceptional Social Behaviour (2019)* or *“Want to come play with me?” Outlier Subgroup Discovery on Spatio-Temporal Interactions (2023)* (see citations below).
 
-You can find an example on how to use the code in this  [Jupyter Notebook](example.ipynb).
-
-This code can also be installed as a package ``pip install graph-sd``
+This repository presents a package, in ``graphsd`` - This package can be installed through ``pip install graph-sd``
+On the ``scripts`` directory, several example files present the usages of the package. You can find a guided example on how to use the code in this  [Jupyter Notebook](example.ipynb).
 
 
 
