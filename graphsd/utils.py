@@ -202,9 +202,12 @@ def to_dataframe(subgroups):
         if type(p) == Pattern:
             in_nodes = len([y for (x, y) in list(p.graph.in_degree()) if y > 0])
             out_nodes = len([y for (x, y) in list(p.graph.out_degree()) if y > 0])
-            dataframe = dataframe.append(
+            dataframe_extension = pd.DataFrame(
                 {'Pattern': p.name, 'Nodes': p.graph.number_of_nodes(), 'in': in_nodes, 'out': out_nodes,
                  'Edges': p.graph.number_of_edges(),
-                 'Mean Weight': round(p.weight, 1), 'Score': round(p.quality, 1)}, ignore_index=True)
+                 'Mean Weight': round(p.weight, 1), 'Score': round(p.quality, 1)
+                 })
+
+            dataframe = pd.concat([dataframe, dataframe_extension], ignore_index=True)
 
     return dataframe
