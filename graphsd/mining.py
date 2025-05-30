@@ -2,6 +2,7 @@ from multiprocessing import Pool
 from multiprocessing.dummy import Pool as ThreadPool
 
 import numpy as np
+import pandas as pd
 from networkx import Graph, DiGraph, MultiGraph, MultiDiGraph
 import networkx as nx
 from orangecontrib.associate.fpgrowth import frequent_itemsets
@@ -341,6 +342,23 @@ class DigraphSDMining(GraphSDMiningBase):
 
         return transactions
 
+    @staticmethod
+    def to_dataframe(subgroups):
+        col_names = ['Pattern', 'Nodes', 'in', 'out', 'Edges', 'Mean Weight', 'Score']
+        dataframe = pd.DataFrame(columns=col_names)
+        for p in subgroups:
+            if type(p) == Pattern:
+                in_nodes = len([y for (x, y) in list(p.graph.in_degree()) if y > 0])
+                out_nodes = len([y for (x, y) in list(p.graph.out_degree()) if y > 0])
+                dataframe_extension = pd.DataFrame(
+                    {'Pattern': p.name, 'Nodes': p.graph.number_of_nodes(), 'in': in_nodes, 'out': out_nodes,
+                     'Edges': p.graph.number_of_edges(),
+                     'Mean Weight': round(p.weight, 1), 'Score': round(p.quality, 1)
+                     })
+
+                dataframe = pd.concat([dataframe, dataframe_extension], ignore_index=True)
+
+        return dataframe
 
 class MultiDigraphSDMining(GraphSDMiningBase):
     def __init__(self,
