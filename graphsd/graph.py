@@ -77,16 +77,17 @@ def count_interactions_digraph(dataframe, proximity=1, time_step=10):
                 continue
             id_x = position.index[xs[i]]
             id_y = position.index[ys[i]]
-            vel1X = float(position.loc[id_x].velX)
-            vel1Y = float(position.loc[id_x].velY)
+            vel1_x = float(position.loc[id_x].velX)
+            vel1_y = float(position.loc[id_x].velY)
 
             vx = float(position.loc[id_y].x) - float(position.loc[id_x].x)
             vy = float(position.loc[id_y].y) - float(position.loc[id_x].y)
 
             cosine = 0
 
-            if (vel1X * vx + vel1Y * vy) != 0:
-                cosine = (vel1X * vx + vel1Y * vy) / (math.sqrt(vel1X ** 2 + vel1Y ** 2) * math.sqrt(vx ** 2 + vy ** 2))
+            if (vel1_x * vx + vel1_y * vy) != 0:
+                cosine = (vel1_x * vx + vel1_y * vy) / (math.sqrt(vel1_x ** 2 + vel1_y ** 2) *
+                                                        math.sqrt(vx ** 2 + vy ** 2))
 
             if cosine >= 0:
                 if (id_x, id_y) in counter:
@@ -123,16 +124,17 @@ def count_interactions_digraph_all(dataframe, proximity=1, time_step=10):
                 continue
             id_x = position.index[xs[i]]
             id_y = position.index[ys[i]]
-            vel1X = float(position.loc[id_x].velX)
-            vel1Y = float(position.loc[id_x].velY)
+            vel1_x = float(position.loc[id_x].velX)
+            vel1_y = float(position.loc[id_x].velY)
 
             vx = float(position.loc[id_y].x) - float(position.loc[id_x].x)
             vy = float(position.loc[id_y].y) - float(position.loc[id_x].y)
 
             cosine = 0
 
-            if (vel1X * vx + vel1Y * vy) != 0:
-                cosine = (vel1X * vx + vel1Y * vy) / (math.sqrt(vel1X ** 2 + vel1Y ** 2) * math.sqrt(vx ** 2 + vy ** 2))
+            if (vel1_x * vx + vel1_y * vy) != 0:
+                cosine = (vel1_x * vx + vel1_y * vy) / (math.sqrt(vel1_x ** 2 + vel1_y ** 2) *
+                                                        math.sqrt(vx ** 2 + vy ** 2))
 
             if cosine >= 0:
                 counter[(id_x, id_y)] += 1
@@ -146,7 +148,7 @@ def count_interactions_digraph_all(dataframe, proximity=1, time_step=10):
 def count_interactions_multi_digraph(dataframe, proximity, time_step=10):
     ids = dataframe.id.unique()
     nids = len(ids)
-    oldInter = np.zeros((nids, nids))
+    old_inter = np.zeros((nids, nids))
     counter = []
     start = min(dataframe.time)
     end = start + time_step
@@ -176,19 +178,19 @@ def count_interactions_multi_digraph(dataframe, proximity, time_step=10):
             old_id_x = np.where(ids == id_x)[0][0]
             old_id_y = np.where(ids == id_y)[0][0]
             if cosine >= 0:  # following
-                oldInter[old_id_x][old_id_y] += 1
+                old_inter[old_id_x][old_id_y] += 1
             else:
-                if oldInter[xs[i]][ys[i]] > 0:
-                    counter += [(id_x, id_y, oldInter[old_id_x][old_id_y])]
-                    oldInter[old_id_x][old_id_y] = 0
+                if old_inter[xs[i]][ys[i]] > 0:
+                    counter += [(id_x, id_y, old_inter[old_id_x][old_id_y])]
+                    old_inter[old_id_x][old_id_y] = 0
 
         start = end
         end = end + time_step
 
     # add last edges (the ones that never stop existing)
-    xs, ys = np.where(oldInter > 0)
+    xs, ys = np.where(old_inter > 0)
     for i in range(len(xs)):
-        counter += [(ids[xs[i]], ids[ys[i]], oldInter[xs[i]][ys[i]])]
+        counter += [(ids[xs[i]], ids[ys[i]], old_inter[xs[i]][ys[i]])]
 
     # counter = counter/count
     # maxW = max([w for x, y, w in counter])
