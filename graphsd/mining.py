@@ -9,7 +9,6 @@ from orangecontrib.associate.fpgrowth import frequent_itemsets
 from graphsd.graph import count_interactions_digraph, count_interactions_multi_digraph, count_interactions, getWEdges
 from graphsd.utils import Pattern, addVelXY, NominalSelector
 
-#import sys
 
 
 class GraphSDMiningBase(object):
