@@ -132,3 +132,4 @@ If you use **GraphSD** in your research, please cite the following publications:
   doi       = {10.1007/978-3-030-30244-3_38}
 }
 ```
+
