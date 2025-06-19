@@ -34,6 +34,14 @@ class NominalSelector:
 
 
 class Pattern:
+    """
+        Represents a discovered pattern in the graph.
+
+        Attributes:
+            selectors (List[NominalSelector]): List of conditions.
+            graph (nx.Graph): Subgraph induced by the pattern.
+            quality (float): Quality score of the pattern.
+    """
     def __init__(self, name, graph, weight):  # name has to be of type list of NominalSelector
         self.name = name
         self.graph = graph
@@ -54,6 +62,14 @@ class Pattern:
 
 
 class NoGPattern:
+    """
+        Pattern representation for cases where a graph is not required.
+
+        Attributes:
+            selectors (List[NominalSelector]): List of conditions.
+            pids (Set[Any]): Set of entity IDs matching the pattern.
+            quality (float): Pattern's quality score.
+    """
     def __init__(self, name, pids, weight):  # name has to be of type list of NominalSelector
         self.name = name
         self.weight = weight
@@ -74,6 +90,16 @@ class NoGPattern:
 
 
 def make_bins(dataframe, n_bins=3):
+    """
+        Discretizes numeric columns of a DataFrame into bins.
+
+        Parameters:
+            df (pd.DataFrame): DataFrame with numeric columns.
+            n_bins (int): Number of bins to use.
+
+        Returns:
+            pd.DataFrame: DataFrame with binned columns.
+    """
     columns = dataframe.drop(['id'], axis=1)._get_numeric_data().columns
 
     for c in columns:
@@ -86,6 +112,16 @@ def make_bins(dataframe, n_bins=3):
 
 
 def get_bins(data, n_bins=3):
+    """
+        Calculates equal-width bin edges for numeric data.
+
+        Parameters:
+            data (array-like): Input numeric data.
+            n_bins (int): Number of bins.
+
+        Returns:
+            List[float]: Bin edges.
+    """
     data = list(data)
 
     data_points_per_bin = math.ceil(len(data) / n_bins)
@@ -111,6 +147,16 @@ def get_bins(data, n_bins=3):
 
 
 def get_bins_2(data, n_bins=3):
+    """
+        Alternate binning strategy using quantiles.
+
+        Parameters:
+            data (array-like): Input data.
+            n_bins (int): Number of bins.
+
+        Returns:
+            List[float]: Quantile-based bin edges.
+        """
     data_points_per_bin = math.ceil(len(data) / n_bins)
     sortedData = data.copy()
     sortedData.sort()
@@ -138,6 +184,15 @@ def get_bins_2(data, n_bins=3):
 
 
 def addVelXY(dataframe):  # has to be sorted ascending by timestamp!!
+    """
+        Adds velocity in X and Y direction to a trajectory DataFrame.
+
+        Parameters:
+            df (pd.DataFrame): DataFrame containing 'x' and 'y' columns representing position.
+
+        Returns:
+            pd.DataFrame: The same DataFrame with added 'velX' and 'velY' columns.
+    """
     first = True
     ids = dataframe.id.unique()
 
@@ -203,6 +258,16 @@ def addVelXY(dataframe):  # has to be sorted ascending by timestamp!!
 
 # Only works for bi directional graphs
 def to_dataframe(subgroups):
+    """
+        Converts a list of Pattern objects into a summary DataFrame. Only works for bidirectional graphs.
+
+        Parameters:
+            subgroups (List[Pattern]): List of Pattern instances.
+
+        Returns:
+            pd.DataFrame: DataFrame summarizing each pattern's graph statistics including node counts,
+                          edge count, mean edge weight, and pattern score.
+    """
     col_names = ['Pattern', 'Nodes', 'in', 'out', 'Edges', 'Mean Weight', 'Score']
     dataframe = pd.DataFrame(columns=col_names)
     for p in subgroups:
