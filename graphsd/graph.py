@@ -7,18 +7,16 @@ from graphsd.utils import *
 
 def count_interactions(dataframe, proximity=1, time_step=10):
     """
+    Computes pairwise interactions for undirected graphs based on spatial proximity
+    over defined time windows.
 
-    get interactions for simple graphs
+    Parameters:
+        dataframe (pd.DataFrame): Data with 'id', 'x', 'y', 'time' columns.
+        proximity (float): Maximum distance for interaction.
+        time_step (int): Size of the time window to consider in each step.
 
-    Parameters
-    ----------
-    dataframe
-    proximity
-    time_step
-
-    Returns
-    -------
-
+    Returns:
+        List[Tuple[int, int, int]]: List of edges with interaction counts.
     """
     counter = {}
     start = min(dataframe.time)
@@ -49,18 +47,16 @@ def count_interactions(dataframe, proximity=1, time_step=10):
 
 def count_interactions_digraph(dataframe, proximity=1, time_step=10):
     """
+    Computes pairwise interactions for directed graphs based on spatial proximity
+    over defined time windows.
 
-    getDInteractions
+    Parameters:
+        dataframe (pd.DataFrame): Data with 'id', 'x', 'y', 'time' columns.
+        proximity (float): Maximum distance to consider an interaction.
+        time_step (int): Time window size.
 
-    Parameters
-    ----------
-    dataframe
-    proximity
-    time_step
-
-    Returns
-    -------
-
+    Returns:
+        Dict[Tuple[int, int], int]: Directed edge counter with interaction frequencies.
     """
     counter = {}
     start = min(dataframe.time)
@@ -102,6 +98,17 @@ def count_interactions_digraph(dataframe, proximity=1, time_step=10):
 
 
 def count_interactions_digraph_all(dataframe, proximity=1, time_step=10):
+    """
+    Computes directed interactions across all node pairs in a time window, filtering based on velocity alignment.
+
+    Parameters:
+        dataframe (pd.DataFrame): Position data including 'id', 'x', 'y', 'velX', 'velY', and 'time'.
+        proximity (float): Distance threshold to define an interaction.
+        time_step (int): Size of the time window for checking proximity.
+
+    Returns:
+        Dict[Tuple[int, int], int]: Directed edge interaction counts.
+    """
     ids = dataframe.id.unique()
 
     counter = {}
@@ -146,6 +153,18 @@ def count_interactions_digraph_all(dataframe, proximity=1, time_step=10):
 
 
 def count_interactions_multi_digraph(dataframe, proximity, time_step=10):
+    """
+    Computes pairwise interactions for multi-directed graphs, tracking repeated edges
+    between the same node pairs across time windows.
+
+    Parameters:
+        dataframe (pd.DataFrame): Input data including 'id', 'x', 'y', 'time'.
+        proximity (float): Distance threshold for interaction.
+        time_step (int): Duration of each time window.
+
+    Returns:
+        List[Tuple[int, int, int]]: Edge tuples with weights for each window of co-presence.
+    """
     ids = dataframe.id.unique()
     nids = len(ids)
     old_inter = np.zeros((nids, nids))
@@ -199,6 +218,18 @@ def count_interactions_multi_digraph(dataframe, proximity, time_step=10):
 
 
 def count_interactions_multi_digraph2(dataframe, proximity, time_step=10):
+    """
+    Computes multi-directed interactions by tracking directional edges and resetting counts
+    when the following condition is broken.
+
+    Parameters:
+        dataframe (pd.DataFrame): Position and velocity data.
+        proximity (float): Maximum distance to be considered an interaction.
+        time_step (int): Time interval for edge activation.
+
+    Returns:
+        List[Tuple[int, int, float]]: Weighted directed edges with following durations.
+    """
     ids = dataframe.id.unique()
     nids = len(ids)
     oldInter = np.zeros((nids, nids))
@@ -250,6 +281,17 @@ def count_interactions_multi_digraph2(dataframe, proximity, time_step=10):
 
 
 def getMultiDInteractions_all(dataframe, proximity, time_step=10):
+    """
+    Computes multi-directed interactions including non-interacting node pairs (filled with weight zero).
+
+    Parameters:
+        dataframe (pd.DataFrame): Position and velocity data.
+        proximity (float): Proximity radius for interactions.
+        time_step (int): Time bin for each interaction window.
+
+    Returns:
+        List[Tuple[int, int, float]]: Full interaction edge list including implicit zeros.
+    """
     ids = dataframe.id.unique()
     nids = len(ids)
     oldInter = np.zeros((nids, nids))
@@ -312,6 +354,18 @@ def getMultiDInteractions_all(dataframe, proximity, time_step=10):
 
 
 def getDInteractions_between(dataframe, start_time, end_time, proximity):
+    """
+    Computes directed interactions over a time range based on velocity direction and proximity.
+
+    Parameters:
+        dataframe (pd.DataFrame): Indexed time series of position and velocity per ID.
+        start_time (str): Start timestamp (e.g., '2022-01-01 00:00:00').
+        end_time (str): End timestamp (e.g., '2022-01-01 01:00:00').
+        proximity (float): Maximum spatial distance for interaction.
+
+    Returns:
+        Dict[Tuple[int, int], int]: Total duration of directional interactions per node pair.
+    """
     ids = dataframe.id.unique()
 
     counter = {}
@@ -368,6 +422,19 @@ def getDInteractions_between(dataframe, start_time, end_time, proximity):
 
 
 def getMultiDInteractions_between(dataframe, start_time, end_time, proximity, nseconds=1):
+    """
+    Tracks directed multi-edges between individuals over time, recording durations of uninterrupted following.
+
+    Parameters:
+        dataframe (pd.DataFrame): Time-indexed position and velocity data.
+        start_time (str): Start timestamp of the interaction period.
+        end_time (str): End timestamp.
+        proximity (float): Spatial threshold for interaction.
+        nseconds (int): Time granularity in seconds for analysis.
+
+    Returns:
+        List[Tuple[int, int, float]]: Directed interactions with duration weights.
+    """
     ids = dataframe.id.unique()
     nids = len(ids)
     oldInter = np.zeros((nids, nids)) - np.ones((nids, nids))
@@ -426,6 +493,15 @@ def getMultiDInteractions_between(dataframe, start_time, end_time, proximity, ns
 
 
 def getWEdges(counter):
+    """
+    Converts a dictionary of edge weights into a list of weighted edge tuples.
+
+    Parameters:
+        counter (Dict[Tuple[int, int], int]): Edge counter.
+
+    Returns:
+        List[Tuple[int, int, float]]: List of weighted edges.
+    """
     gedges = []
     for key in counter:
         x, y = key
@@ -435,6 +511,16 @@ def getWEdges(counter):
     return gedges
 
 def edgesInPDescription(G, P):
+    """
+    Filters edges in a graph based on whether they match all conditions in a pattern description.
+
+    Parameters:
+        G (nx.Graph): Input graph with attribute-annotated edges.
+        P (List[NominalSelector]): Attribute-value conditions.
+
+    Returns:
+        Tuple[List[Edge], Set[Node]]: Matching edges and the set of involved nodes.
+    """
     edges = []
     nodes = set()
     for e in list(G.edges(data=True)):
@@ -452,6 +538,16 @@ def edgesInPDescription(G, P):
 
 
 def edgesInP(G, P):
+    """
+    Extracts the subgraph induced by a pattern and computes its average edge weight.
+
+    Parameters:
+        G (nx.Graph): Graph with edge attributes.
+        P (List[NominalSelector]): Pattern selectors used to filter edges.
+
+    Returns:
+        Pattern: A Pattern object with the induced subgraph and its average weight.
+    """
     edges = []
     nodes = set()
     wsum = 0
@@ -486,6 +582,16 @@ def edgesInP(G, P):
 
 
 def infoPats_nodes(listOfPatterns, dataset):
+    """
+    Summarizes a list of patterns with coverage statistics in node-based (NoGPattern) scenarios.
+
+    Parameters:
+        listOfPatterns (List[NoGPattern]): List of patterns with .ids and .name attributes.
+        dataset (pd.DataFrame): Dataset indexed by node IDs.
+
+    Returns:
+        pd.DataFrame: Summary table with pattern name, size, unique IDs, weight, and score.
+    """
     col_names = ['Pattern', 'N', 'ids', 'Mean Weight', 'Score']
     my_df = pd.DataFrame(columns=col_names)
     for p in listOfPatterns:

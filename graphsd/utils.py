@@ -7,8 +7,8 @@ class NominalSelector:
         Represents a nominal selector used in pattern descriptions for subgroup discovery.
 
         Attributes:
-            att (str): Attribute name.
-            val (Any): Attribute value.
+            attribute (str): Attribute name.
+            value (Any): Attribute value.
     """
     def __init__(self, attribute, value):
         self.attribute = attribute
@@ -38,8 +38,9 @@ class Pattern:
         Represents a discovered pattern in the graph.
 
         Attributes:
-            selectors (List[NominalSelector]): List of conditions.
+            name (List[NominalSelector]): List of conditions.
             graph (nx.Graph): Subgraph induced by the pattern.
+            weight (float): Mean edge weight.
             quality (float): Quality score of the pattern.
     """
     def __init__(self, name, graph, weight):  # name has to be of type list of NominalSelector
@@ -66,8 +67,9 @@ class NoGPattern:
         Pattern representation for cases where a graph is not required.
 
         Attributes:
-            selectors (List[NominalSelector]): List of conditions.
+            name (List[NominalSelector]): List of conditions.
             pids (Set[Any]): Set of entity IDs matching the pattern.
+            weight (float): Mean weight.
             quality (float): Pattern's quality score.
     """
     def __init__(self, name, pids, weight):  # name has to be of type list of NominalSelector
@@ -156,7 +158,7 @@ def get_bins_2(data, n_bins=3):
 
         Returns:
             List[float]: Quantile-based bin edges.
-        """
+    """
     data_points_per_bin = math.ceil(len(data) / n_bins)
     sortedData = data.copy()
     sortedData.sort()
