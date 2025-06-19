@@ -1,15 +1,15 @@
+from collections import Counter
 from multiprocessing import Pool
 from multiprocessing.dummy import Pool as ThreadPool
 
+import networkx as nx
 import numpy as np
 import pandas as pd
 from networkx import Graph, DiGraph, MultiGraph, MultiDiGraph
-import networkx as nx
 from orangecontrib.associate.fpgrowth import frequent_itemsets
 
 from graphsd.graph import count_interactions_digraph, count_interactions_multi_digraph, count_interactions, getWEdges
-from graphsd.utils import Pattern, addVelXY, NominalSelector
-
+from graphsd.utils import Pattern, addVelXY, NominalSelector, get_rng
 
 
 class GraphSDMiningBase(object):
@@ -27,19 +27,21 @@ class GraphSDMiningBase(object):
             random_state (int): Random seed.
             n_jobs (int): Number of parallel jobs.
     """
-    def __init__(self,
-                 n_bins=3,
-                 n_samples=100,
-                 metric='mean',
-                 mode="comparison",
-                 random_state=None,
-                 n_jobs=1
-                 ):
+
+    def __init__(
+            self,
+            n_bins: int = 3,
+            n_samples: int = 100,
+            metric: str = 'mean',
+            mode: str = "comparison",
+            random_state: int | None = None,
+            n_jobs: int = 1
+    ) -> None:
         self.n_bins = n_bins
         self.n_samples = n_samples
         self.metric = metric
         self.mode = mode
-        self.random_state = random_state
+        self.rng = get_rng(random_state)
         self.n_jobs = n_jobs
 
         self.graph = None
@@ -49,16 +51,16 @@ class GraphSDMiningBase(object):
         self.multi = False
 
     @staticmethod
-    def get_frequent_items(transactions, min_support):
+    def get_frequent_items(transactions: list[list[str]], min_support: float) -> dict[tuple[str, ...], int]:
         """
-            Computes frequent itemsets from transaction data using FP-growth.
+        Computes frequent item_sets from transaction data using FP-growth.
 
-            Parameters:
-                transactions (List[List[str]]): List of attribute-value transactions.
-                min_support (float): Minimum support threshold (0–1).
+        Parameters:
+            transactions (List[List[str]]): List of attribute-value transactions.
+            min_support (float): Minimum support threshold (0–1).
 
-            Returns:
-                Dict[Tuple[str], int]: Frequent itemsets with their support counts.
+        Returns:
+            Dict[Tuple[str], int]: Frequent item_sets with their support counts.
         """
         transactions_dict = {}
         last = 1
@@ -75,12 +77,13 @@ class GraphSDMiningBase(object):
 
         transactions_dict = {v: k for k, v in transactions_dict.items()}
 
-        itemsets = list(frequent_itemsets(transactions_as_int, min_support=min_support))
+        item_sets = list(frequent_itemsets(transactions_as_int, min_support=min_support))
 
         frequent_items = {}
-        for itemset, support in itemsets:
+        temp = []
+        for item_set, support in item_sets:
             first = True
-            for n in itemset:
+            for n in item_set:
                 if first:
                     temp = (transactions_dict[n],)
                     first = False
@@ -91,7 +94,7 @@ class GraphSDMiningBase(object):
 
         return frequent_items
 
-    def _get_transactions(self, mode):
+    def _get_transactions(self, mode: str) -> list[list[NominalSelector]]:
         """
             Placeholder for graph-specific transaction conversion method.
 
@@ -103,29 +106,32 @@ class GraphSDMiningBase(object):
         """
         pass
 
-    def subgroup_discovery(self, mode="comparison", min_support=0.10, metric='mean', quality_measure='qS'):
+    def subgroup_discovery(self,
+                           mode: str = "comparison",
+                           min_support: float = 0.10,
+                           metric: str = 'mean',
+                           quality_measure: str = 'qS'
+                           ) -> list[Pattern]:
         """
             Performs subgroup discovery by mining frequent patterns and evaluating their quality.
 
             Parameters:
                 mode (str): Attribute assignment mode ('to', 'from', or 'comparison').
-                min_support (float): Minimum support threshold for frequent itemsets.
+                min_support (float): Minimum support threshold for frequent item sets.
                 metric (str): Quality evaluation metric ('mean' or 'var').
                 quality_measure (str): Quality scoring method ('qS' or 'qP').
 
             Returns:
                 List[Pattern]: Ranked list of patterns with quality scores.
         """
-        # TODO: random_state is not working
-        np.random.seed(self.random_state)
         transactions = self._get_transactions(mode)
-        frequent_itemset = self.get_frequent_items(transactions, min_support)
+        frequent_item_set = self.get_frequent_items(transactions, min_support)
 
         if quality_measure in ['qP', 'qS']:
             quality_function = self.quality_measure_base
         # elif quality_measure == 'new_qm']::
-            # Refer to alternative quality measures here
-            # self.measure_score = self.measure_score
+        # Refer to alternative quality measures here
+        # self.measure_score = self.measure_score
         else:
             msg = "Unknown quality function. Current ones are: ['qP','qS']"
             ValueError(msg)
@@ -133,20 +139,25 @@ class GraphSDMiningBase(object):
         if self.n_jobs > 1:
             pool = Pool(self.n_jobs)
             subgroups = []
-            for frequent_items, _ in frequent_itemset.items():
+            for frequent_items, _ in frequent_item_set.items():
                 pool.apply_async(quality_function, args=(frequent_items, metric, quality_measure),
                                  callback=subgroups.append)
             pool.close()
             pool.join()
         else:
             subgroups = [quality_function(frequent_items, metric=metric, measure_type=quality_measure)
-                         for frequent_items, _ in frequent_itemset.items()]
+                         for frequent_items, _ in frequent_item_set.items()]
 
         subgroups.sort(reverse=True)
 
         return subgroups
 
-    def quality_measure_base(self, pattern, metric, measure_type='qS'):
+    def quality_measure_base(
+            self,
+            pattern: tuple[str, ...],
+            metric: str,
+            measure_type: str = 'qS'
+    ) -> Pattern:
         """
             Computes the quality score of a pattern's induced subgraph.
 
@@ -184,7 +195,14 @@ class GraphSDMiningBase(object):
 
         return subgroup
 
-    def statistical_validation(self, n_samples, max_n_edges, pattern_size, metric, max_pattern_edges):
+    def statistical_validation(
+            self,
+            n_samples: int,
+            max_n_edges: int,
+            pattern_size: int,
+            metric: str,
+            max_pattern_edges: float
+    ) -> tuple[float, float]:
         """
             Estimates mean and standard deviation of scores from random subgraphs for normalization.
 
@@ -208,7 +226,7 @@ class GraphSDMiningBase(object):
             # indexes = np.random.choice(range(interval), pattern_size, replace=False)
             # random_edges = [list_of_edges[i] for i in indexes]
             # TODO: Needs to be confirmed if commented version is the correct or not!
-            indexes = np.random.choice(range(max_n_edges), pattern_size, replace=False)
+            indexes = self.rng.choice(range(max_n_edges), pattern_size, replace=False)
             random_edges = [list_of_edges[i] for i in indexes if i < graph_size]
             random_subgraph = self.graph.edge_subgraph(random_edges)
             pool.apply_async(self.measure_score, args=(random_subgraph,
@@ -225,7 +243,11 @@ class GraphSDMiningBase(object):
         return mean, std
 
     @staticmethod
-    def measure_score(graph_of_pattern, metric, max_pattern_edges=None):
+    def measure_score(
+            graph_of_pattern: nx.Graph,
+            metric: str,
+            max_pattern_edges: float | None = None
+    ) -> float:
         """
             Computes a numeric quality score for a given subgraph using the selected metric.
 
@@ -252,9 +274,11 @@ class GraphSDMiningBase(object):
                 weights = [e[2]['weight'] for e in graph_of_pattern.edges(data=True)]
                 var = sum((np.array(weights) - mean) ** 2) / max_pattern_edges
                 quality = var
+            else:
+                raise ValueError(f"Unsupported metric: {metric}")
         return quality
 
-    def get_pattern_graph(self, pattern):
+    def get_pattern_graph(self, pattern: tuple[str, ...]) -> nx.Graph:
         """
             Builds a subgraph containing only edges that match the attribute-value selectors.
 
@@ -281,7 +305,7 @@ class GraphSDMiningBase(object):
 
         return graph_of_pattern
 
-    def get_edges_in_pattern(self, pattern) -> list:
+    def get_edges_in_pattern(self, pattern: tuple[NominalSelector, ...]) -> list[tuple]:
         """
         Extracts edges from the main graph that satisfy all conditions in the pattern.
 
@@ -306,7 +330,7 @@ class GraphSDMiningBase(object):
         return edges
 
     @staticmethod
-    def count_edges(graph):
+    def count_edges(graph: nx.MultiGraph | nx.MultiDiGraph) -> int:
         """
         Counts the number of multi-edges beyond the basic single-edge count.
 
@@ -323,18 +347,20 @@ class GraphSDMiningBase(object):
                     count += (graph.number_of_edges(node1, node2) - 1)
         return count
 
+
 class DigraphSDMining(GraphSDMiningBase):
     """
     Subclass for directed graphs. Implements methods specific to directed edge interaction modeling.
     """
+
     def __init__(self,
-                 n_bins=3,
-                 n_samples=100,
-                 metric='mean',
-                 mode="comparison",
-                 random_state=None,
-                 n_jobs=1
-                 ):
+                 n_bins: int = 3,
+                 n_samples: int = 100,
+                 metric: str = 'mean',
+                 mode: str = "comparison",
+                 random_state: int | None = None,
+                 n_jobs: int = 1
+                 ) -> None:
         super().__init__(
             n_bins=n_bins,
             n_samples=n_samples,
@@ -348,7 +374,7 @@ class DigraphSDMining(GraphSDMiningBase):
         self.n_samples = n_samples
         self.metric = metric
         self.mode = mode
-        self.random_state = random_state
+        self.rng = get_rng(random_state)
         self.n_jobs = n_jobs
 
         self.graph = None
@@ -356,7 +382,12 @@ class DigraphSDMining(GraphSDMiningBase):
 
         self.graph_type = "digraph"
 
-    def read_data(self, position_data, social_data, time_step=10):
+    def read_data(
+            self,
+            position_data: pd.DataFrame,
+            social_data: pd.DataFrame,
+            time_step: int = 10
+    ) -> Counter:
         """
         Constructs a directed graph from position data and social attributes.
 
@@ -378,7 +409,7 @@ class DigraphSDMining(GraphSDMiningBase):
 
         return counter
 
-    def _create_graph(self, counter, ids):
+    def _create_graph(self, counter: Counter, ids: list[int]) -> None:
         """
         Initializes the directed graph with nodes and weighted edges.
 
@@ -396,7 +427,7 @@ class DigraphSDMining(GraphSDMiningBase):
         self.graph = graph
         self.graph.max_edges = self.graph.number_of_nodes() * (self.graph.number_of_nodes() - 1)
 
-    def _get_transactions(self, mode):
+    def _get_transactions(self, mode: str) -> list[list[NominalSelector]]:
         """
         Generates transactions by assigning edge attributes based on the selected mode.
 
@@ -409,7 +440,10 @@ class DigraphSDMining(GraphSDMiningBase):
         transactions = self.set_attributes(mode=mode)
         return transactions
 
-    def set_attributes(self, signed_graph=None, mode="comparison"):
+    def set_attributes(self,
+                       signed_graph: nx.DiGraph | None = None,
+                       mode: str = "comparison"
+                       ) -> list[list[NominalSelector]]:
         """
         Assigns edge attributes from node-level data depending on the mode of comparison.
 
@@ -463,7 +497,7 @@ class DigraphSDMining(GraphSDMiningBase):
         return transactions
 
     @staticmethod
-    def to_dataframe(subgroups):
+    def to_dataframe(subgroups: list[Pattern]) -> pd.DataFrame:
         """
         Summarizes a list of discovered patterns in a tabular DataFrame (for directed graphs).
 
@@ -473,34 +507,36 @@ class DigraphSDMining(GraphSDMiningBase):
         Returns:
             pd.DataFrame: Summary including node and edge counts, mean weight, and quality.
         """
-        col_names = ['Pattern', 'Nodes', 'in', 'out', 'Edges', 'Mean Weight', 'Score']
-        dataframe = pd.DataFrame(columns=col_names)
+        dataframe = pd.DataFrame()
         for p in subgroups:
             if type(p) == Pattern:
                 in_nodes = len([y for (x, y) in list(p.graph.in_degree()) if y > 0])
                 out_nodes = len([y for (x, y) in list(p.graph.out_degree()) if y > 0])
                 dataframe_extension = pd.DataFrame(
-                    {'Pattern': p.name, 'Nodes': p.graph.number_of_nodes(), 'in': in_nodes, 'out': out_nodes,
-                     'Edges': p.graph.number_of_edges(),
-                     'Mean Weight': round(p.weight, 1), 'Score': round(p.quality, 1)
-                     })
+                    [{'Pattern': p.name, 'Nodes': p.graph.number_of_nodes(), 'in': in_nodes, 'out': out_nodes,
+                      'Edges': p.graph.number_of_edges(),
+                      'Mean Weight': round(p.weight, 1), 'Score': round(p.quality, 1)
+                      }])
 
                 dataframe = pd.concat([dataframe, dataframe_extension], ignore_index=True)
 
         return dataframe
 
+
 class MultiDigraphSDMining(GraphSDMiningBase):
     """
         Subclass for multi-directed graphs (parallel edges allowed).
     """
-    def __init__(self,
-                 n_bins=3,
-                 n_samples=100,
-                 metric='mean',
-                 mode="comparison",
-                 random_state=None,
-                 n_jobs=1
-                 ):
+
+    def __init__(
+            self,
+            n_bins: int = 3,
+            n_samples: int = 100,
+            metric: str = 'mean',
+            mode: str = "comparison",
+            random_state: int | None = None,
+            n_jobs: int = 1
+    ) -> None:
         super().__init__(
             n_bins=n_bins,
             n_samples=n_samples,
@@ -513,7 +549,7 @@ class MultiDigraphSDMining(GraphSDMiningBase):
         self.n_samples = n_samples
         self.metric = metric
         self.mode = mode
-        self.random_state = random_state
+        self.rng = get_rng(random_state)
         self.n_jobs = n_jobs
 
         self.graph = None
@@ -521,7 +557,12 @@ class MultiDigraphSDMining(GraphSDMiningBase):
 
         self.multi = True
 
-    def read_data(self, position_data, social_data, time_step=10):
+    def read_data(
+            self,
+            position_data: pd.DataFrame,
+            social_data: pd.DataFrame,
+            time_step: int = 10
+    ) -> Counter:
         """
         Constructs a MultiDiGraph from spatial-temporal interactions and social metadata.
 
@@ -543,7 +584,7 @@ class MultiDigraphSDMining(GraphSDMiningBase):
 
         return counter
 
-    def _create_graph(self, counter, ids):
+    def _create_graph(self, counter: Counter, ids: list[int]) -> None:
         """
         Creates a MultiDiGraph from a weighted edge counter.
 
@@ -563,7 +604,7 @@ class MultiDigraphSDMining(GraphSDMiningBase):
         # TODO: Estimating the max edges of a multi graph is not 100% correct
         self.graph.max_edges += self.count_edges(self.graph)
 
-    def _get_transactions(self, mode):
+    def _get_transactions(self, mode: str) -> list[list[NominalSelector]]:
         """
         Extracts edge-level transactions for pattern mining using multi-directed graph structure.
 
@@ -576,7 +617,11 @@ class MultiDigraphSDMining(GraphSDMiningBase):
         transactions = self.set_attributes(mode=mode)
         return transactions
 
-    def set_attributes(self, signed_graph=None, mode="comparison"):
+    def set_attributes(
+            self,
+            signed_graph: nx.MultiDiGraph | None = None,
+            mode: str = "comparison"
+    ) -> list[list[NominalSelector]]:
         """
         Annotates each edge with attributes derived from node-level metadata, handling multiple edges.
 
@@ -628,17 +673,20 @@ class MultiDigraphSDMining(GraphSDMiningBase):
         # nx.set_edge_attributes(G, attr)
         return transactions
 
+
 class GraphSDMining(GraphSDMiningBase):
     """
     Subclass for undirected graphs. Implements edge construction and attribute mapping for symmetric interactions.
     """
-    def __init__(self,
-                 n_bins=3,
-                 n_samples=100,
-                 metric='mean',
-                 random_state=None,
-                 n_jobs=1
-                 ):
+
+    def __init__(
+            self,
+            n_bins: int = 3,
+            n_samples: int = 100,
+            metric: str = 'mean',
+            random_state: int | None = None,
+            n_jobs: int = 1
+    ) -> None:
         super().__init__(
             n_bins=n_bins,
             n_samples=n_samples,
@@ -650,7 +698,7 @@ class GraphSDMining(GraphSDMiningBase):
         self.n_bins = n_bins
         self.n_samples = n_samples
         self.metric = metric
-        self.random_state = random_state
+        self.rng = random_state
         self.n_jobs = n_jobs
 
         self.graph = None
@@ -658,7 +706,12 @@ class GraphSDMining(GraphSDMiningBase):
 
         self.graph_type = "digraph"
 
-    def read_data(self, position_data, social_data, time_step=10):
+    def read_data(
+            self,
+            position_data: pd.DataFrame,
+            social_data: pd.DataFrame,
+            time_step: int = 10
+    ) -> Counter:
         """
         Constructs an undirected interaction graph based on co-location in space and time.
 
@@ -678,7 +731,7 @@ class GraphSDMining(GraphSDMiningBase):
 
         return counter
 
-    def _create_graph(self, counter, ids):
+    def _create_graph(self, counter: Counter, ids: list[int]) -> None:
         """
         Initializes the undirected graph using provided edges and node list.
 
@@ -696,7 +749,7 @@ class GraphSDMining(GraphSDMiningBase):
         self.graph = graph
         self.graph.max_edges = (self.graph.number_of_nodes() * (self.graph.number_of_nodes() - 1)) / 2
 
-    def _get_transactions(self, mode=None):
+    def _get_transactions(self, mode: str | None = None) -> list[list[NominalSelector]]:
         """
         Generates transactions by comparing node attributes on undirected edges.
 
@@ -709,7 +762,10 @@ class GraphSDMining(GraphSDMiningBase):
         transactions = self.set_attributes()
         return transactions
 
-    def set_attributes(self, signed_graph=None):
+    def set_attributes(
+            self,
+            signed_graph: nx.Graph | None = None
+    ) -> list[list[NominalSelector]]:
         """
         Assigns equality-based attributes to each edge in the undirected graph.
 

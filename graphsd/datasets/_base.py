@@ -4,7 +4,7 @@ from pathlib import Path
 module_path = Path(__file__).parent
 
 
-def load_playground_a():
+def load_playground_a() -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     Loads anonymized position and social data for Playground A.
 
@@ -17,7 +17,7 @@ def load_playground_a():
     return position_data, social_data
 
 
-def load_playground_b():
+def load_playground_b() -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     Loads anonymized position and social data for Playground B.
 

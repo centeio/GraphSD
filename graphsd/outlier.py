@@ -4,6 +4,9 @@ import pandas as pd
 from scipy.spatial import Voronoi
 from shapely.geometry import MultiPoint, Point, Polygon
 from sklearn.neighbors import LocalOutlierFactor
+from typing import List, Optional
+from graphsd.utils import get_rng
+from graphsd.utils import NoGPattern, NominalSelector
 
 
 class OutlierSDMining(object):
@@ -21,7 +24,7 @@ class OutlierSDMining(object):
         n_samples (int): Number of samples for significance testing.
         metric (str): Metric used in quality evaluation.
         mode (str): Attribute comparison mode.
-        random_state (int or None): Random seed.
+        rng (int or None): Random seed.
         n_jobs (int): Number of parallel processes to use.
 
         graph (nx.Graph): Not used in LOF/area directly, placeholder.
@@ -43,7 +46,7 @@ class OutlierSDMining(object):
         self.n_samples = n_samples
         self.metric = metric
         self.mode = mode
-        self.random_state = random_state
+        self.rng = get_rng(random_state)
         self.n_jobs = n_jobs
 
         self.graph = None
@@ -75,11 +78,8 @@ class OutlierSDMining(object):
             temp_df = social_data[social_data['id'].isin(ids)].copy()
             position = position_data.query("@start <= time <= @end").groupby(['id']).mean()
             pids = [row.id for index, row in position.iterrows()]
-            # print(getAreas(positions))
-            # try:
+
             areasp = self.compute_local_outlier_factor_scores(position[['x', 'y']], k=k, contamination=contamination)
-            # print(areasp)
-            # return areasp
 
             temp_areas = []
             temp_times = []
@@ -393,53 +393,86 @@ def qs_nodes_aux(dataframe, eids, target):
     return wsum / len(eids)
 
 
-def qs_nodes(dataset, P, freq, nsamples, target):
+# def qs_nodes(dataset, P, freq, n_samples, target):
+#     """
+#     Evaluates pattern quality using Monte Carlo sampling over entities.
+#
+#     Parameters:
+#         dataset (pd.DataFrame): Full dataset.
+#         P (List[NominalSelector]): Pattern conditions.
+#         freq (int): Frequency of the pattern (not used).
+#         n_samples (int): Number of random samples for null distribution.
+#         target (str): Target variable for quality scoring.
+#
+#     Returns:
+#         NoGPattern: Pattern object with quality score set.
+#     """
+#     pat = idsInP(dataset, P, target)
+#
+#     # totalE = round((len(list(G.nodes())) * (len(list(G.nodes())) - 1)))
+#
+#     temp_ids = dataset.index.values.tolist()
+#     sample = []
+#     rng = get_rng(random_state)
+#
+#     for r in range(n_samples):
+#         indxs = np.random.choice(temp_ids, size=len(pat.ids), replace=False)
+#         tempres = qs_nodes_aux(dataset, indxs, target)
+#         sample = np.append(sample, [tempres])
+#
+#     mean = np.mean(sample)
+#     std = np.std(sample)
+#     pat.quality = (pat.weight - mean) / std
+#
+#     return pat
+
+def qs_nodes(
+    dataset: pd.DataFrame,
+    pattern_selectors: List['NominalSelector'],
+    frequency: int,
+    n_samples: int,
+    target: str,
+    random_state: Optional[int] = None
+) -> 'NoGPattern':
     """
     Evaluates pattern quality using Monte Carlo sampling over entities.
 
-    Parameters:
-        dataset (pd.DataFrame): Full dataset.
-        P (List[NominalSelector]): Pattern conditions.
-        freq (int): Frequency of the pattern (not used).
-        nsamples (int): Number of random samples for null distribution.
-        target (str): Target variable for quality scoring.
+    Parameters
+    ----------
+    dataset : pd.DataFrame
+        Full dataset.
+    pattern_selectors : List[NominalSelector]
+        Pattern conditions to apply.
+    frequency : int
+        Frequency of the pattern (currently unused).
+    n_samples : int
+        Number of random samples for the null distribution.
+    target : str
+        Target variable used for quality scoring.
+    random_state : int, optional
+        Random seed for reproducibility.
 
-    Returns:
-        NoGPattern: Pattern object with quality score set.
+    Returns
+    -------
+    NoGPattern
+        Pattern object with updated quality score.
     """
-    pat = idsInP(dataset, P, target)
-    # print('edges ', len(edges))
+    rng = get_rng(random_state)
+    pattern = idsInP(dataset, pattern_selectors, target)
 
-    # totalE = round((len(list(G.nodes())) * (len(list(G.nodes())) - 1)))
-    # print(P)
-    # print(qres)
-    # print(nodes)
+    temp_ids = dataset.index.tolist()
+    results = []
 
-    temp_ids = dataset.index.values.tolist()
+    for _ in range(n_samples):
+        sampled_indices = rng.choice(temp_ids, size=len(pattern.ids), replace=False)
+        results.append(qs_nodes_aux(dataset, sampled_indices, target))
 
-    sample = []
+    sample_array = np.array(results)
+    mean = np.mean(sample_array)
+    std = np.std(sample_array)
 
-    # print('P ', P)
-    # print('n: ', pat.ids)
-
-    for r in range(nsamples):
-        indxs = np.random.choice(temp_ids, len(pat.ids), replace=False)
-        # print(indxs)
-        # print(len(randomE))
-        tempres = qs_nodes_aux(dataset, indxs, target)
-        # print(tempres)
-        sample = np.append(sample, [tempres])
-
-    mean = np.mean(sample)
-    # print('mean ',mean)
-    std = np.std(sample)
-    # print('std ',std)
-    # print('weight ', pat.weight)
-
-    pat.quality = (pat.weight - mean) / std
-    # print(pat)
-    return pat
-
+    pattern.quality = (pattern.weight - mean) / std if std != 0 else 0.0
+    return pattern
 
 def treeQuality_nodes(dataset, nodes, target):
     """
@@ -454,12 +487,11 @@ def treeQuality_nodes(dataset, nodes, target):
     Returns:
         List[NoGPattern]: List of patterns with computed quality scores.
     """
-    dataset2 = dataset.copy()
-    dataset2 = dataset2.reset_index()
+    dataset = dataset.reset_index(drop=True)
     qs = []
     for k, val in nodes.items():
         try:
-            pat = qs_nodes(dataset2, k, val, 100, target)
+            pat = qs_nodes(dataset, k, val, 100, target)
             qs += [pat]
         except ZeroDivisionError:
             continue

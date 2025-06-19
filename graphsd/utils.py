@@ -1,6 +1,13 @@
 import math
 import pandas as pd
 
+from numpy.random import default_rng
+
+DEFAULT_RANDOM_SEED = 42
+default_rng_instance = default_rng(DEFAULT_RANDOM_SEED)
+
+def get_rng(seed=None):
+    return default_rng(seed if seed is not None else DEFAULT_RANDOM_SEED)
 
 class NominalSelector:
     """
@@ -91,7 +98,7 @@ class NoGPattern:
         return self.quality < other.quality
 
 
-def make_bins(dataframe, n_bins=3):
+def make_bins(dataframe: pd.DataFrame, n_bins: int = 3) -> pd.DataFrame:
     """
         Discretizes numeric columns of a DataFrame into bins.
 
@@ -113,7 +120,7 @@ def make_bins(dataframe, n_bins=3):
     return dataframe
 
 
-def get_bins(data, n_bins=3):
+def get_bins(data: pd.Series, n_bins: int = 3) -> list[float]:
     """
         Calculates equal-width bin edges for numeric data.
 
@@ -148,7 +155,7 @@ def get_bins(data, n_bins=3):
     return binList
 
 
-def get_bins_2(data, n_bins=3):
+def get_bins_2(data: pd.Series, n_bins: int = 3) -> list[float]:
     """
         Alternate binning strategy using quantiles.
 
@@ -185,7 +192,7 @@ def get_bins_2(data, n_bins=3):
     return binList
 
 
-def addVelXY(dataframe):  # has to be sorted ascending by timestamp!!
+def addVelXY(dataframe: pd.DataFrame) -> pd.DataFrame:  # has to be sorted ascending by timestamp!!
     """
         Adds velocity in X and Y direction to a trajectory DataFrame.
 
@@ -256,32 +263,3 @@ def addVelXY(dataframe):  # has to be sorted ascending by timestamp!!
 #         newTransactions[temp] = count
 #
 #     return newTransactions
-
-
-# Only works for bi directional graphs
-def to_dataframe(subgroups):
-    """
-        Converts a list of Pattern objects into a summary DataFrame. Only works for bidirectional graphs.
-
-        Parameters:
-            subgroups (List[Pattern]): List of Pattern instances.
-
-        Returns:
-            pd.DataFrame: DataFrame summarizing each pattern's graph statistics including node counts,
-                          edge count, mean edge weight, and pattern score.
-    """
-    col_names = ['Pattern', 'Nodes', 'in', 'out', 'Edges', 'Mean Weight', 'Score']
-    dataframe = pd.DataFrame(columns=col_names)
-    for p in subgroups:
-        if type(p) == Pattern:
-            in_nodes = len([y for (x, y) in list(p.graph.in_degree()) if y > 0])
-            out_nodes = len([y for (x, y) in list(p.graph.out_degree()) if y > 0])
-            dataframe_extension = pd.DataFrame(
-                {'Pattern': p.name, 'Nodes': p.graph.number_of_nodes(), 'in': in_nodes, 'out': out_nodes,
-                 'Edges': p.graph.number_of_edges(),
-                 'Mean Weight': round(p.weight, 1), 'Score': round(p.quality, 1)
-                 })
-
-            dataframe = pd.concat([dataframe, dataframe_extension], ignore_index=True)
-
-    return dataframe
