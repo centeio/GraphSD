@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=61.0", "setuptools_scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "graph-sd"
+dynamic = ["version"]
+description = "Mining graphs with Subgroup Discovery"
+readme = "README.md"
+requires-python = ">=3.6"
+license = { text = "BSD-3-Clause" }
+authors = [
+    { name = "C. Centeio Jorge", email = "c.jorge@tudelft.nl"},
+    { name = "Cláudio Rebelo de Sá" }
+]
+
+dependencies = [
+    "pandas",
+    "numpy",
+    "scipy",
+    "networkx",
+    "Orange3-Associate"
+]
+
+[project.urls]
+"Homepage" = "https://github.com/centeio/GraphSD"
+"Download" = "https://github.com/centeio/GraphSD"
+
+[project.optional-dependencies]
+tests = [
+    "pytest",
+    "pytest-cov"
+]
+docs = [
+    "sphinx",
+    "sphinx-gallery",
+    "sphinx_rtd_theme",
+    "numpydoc",
+    "matplotlib"
+]
+
+[tool.pytest.ini_options]
+addopts = "--doctest-modules"
+
+[tool.setuptools_scm]
+version_file = "graphsd/_version.py"
