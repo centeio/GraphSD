@@ -7,7 +7,28 @@ from sklearn.neighbors import LocalOutlierFactor
 
 
 class OutlierSDMining(object):
+    """
+    Outlier mining class for spatial-temporal trajectory data.
 
+    Provides functionality to compute:
+    - Local Outlier Factor (LOF) scores over time
+    - Voronoi cell area dynamics
+    - Subgroup discovery on node-level anomaly indicators
+
+    Attributes:
+        quality_measure (str): Quality function type (e.g., 'qS').
+        n_bins (int): Number of bins for discretization.
+        n_samples (int): Number of samples for significance testing.
+        metric (str): Metric used in quality evaluation.
+        mode (str): Attribute comparison mode.
+        random_state (int or None): Random seed.
+        n_jobs (int): Number of parallel processes to use.
+
+        graph (nx.Graph): Not used in LOF/area directly, placeholder.
+        transactions (Any): Placeholder for transaction data.
+        social_data (pd.DataFrame): Metadata for individuals.
+        graph_type (str): Not used directly; reserved for compatibility.
+    """
     def __init__(self,
                  quality_measure='qS',
                  n_bins=3,
@@ -32,6 +53,19 @@ class OutlierSDMining(object):
         self.graph_type = None
 
     def get_lof(self, position_data, social_data, time_step=1, k=5, contamination=.1):
+        """
+        Calculates the Local Outlier Factor (LOF) score for each individual across time windows.
+
+        Parameters:
+            position_data (pd.DataFrame): DataFrame with 'x', 'y', 'time', and 'id'.
+            social_data (pd.DataFrame): DataFrame with 'id' and metadata per individual.
+            time_step (int): Size of the sliding time window (in seconds).
+            k (int): Number of neighbors to use in LOF.
+            contamination (float): LOF contamination parameter.
+
+        Returns:
+            pd.DataFrame: Time-indexed LOF scores per individual.
+        """
         start = min(position_data.time)
         end = start + time_step
         areas_df = pd.DataFrame()
@@ -73,6 +107,17 @@ class OutlierSDMining(object):
 
     @staticmethod
     def compute_local_outlier_factor_scores(position_df, k=5, contamination=.1):
+        """
+        Computes negative LOF scores for given positions.
+
+        Parameters:
+            position_df (pd.DataFrame): DataFrame with 'x' and 'y' columns.
+            k (int): Number of neighbors for LOF.
+            contamination (float): LOF contamination parameter.
+
+        Returns:
+            List[float]: LOF scores (higher = more anomalous).
+        """
         clf = LocalOutlierFactor(n_neighbors=k, contamination=contamination)
         clf.fit_predict(position_df)
         lof_scores = clf.negative_outlier_factor_
@@ -81,6 +126,17 @@ class OutlierSDMining(object):
 
     @staticmethod
     def compute_voronoi_areas(points, pids, print_mode=False):
+        """
+        Computes Voronoi cell areas for a given set of 2D points.
+
+        Parameters:
+            points (List[Tuple[float, float]]): List of 2D coordinates.
+            pids (List[Any]): Point IDs (same order as `points`).
+            print_mode (bool): If True, plots filled Voronoi cells.
+
+        Returns:
+            List[float]: Area of each cell.
+        """
         vor = Voronoi(points)
         new_vertices = []
 
@@ -112,6 +168,17 @@ class OutlierSDMining(object):
         return areas
 
     def get_voronoi_areas(self, position_data, social_data, time_step=1):
+        """
+        Computes Voronoi cell areas over time for each individual.
+
+        Parameters:
+            position_data (pd.DataFrame): DataFrame with 'x', 'y', 'time', and 'id'.
+            social_data (pd.DataFrame): DataFrame with 'id' and attributes.
+            time_step (int): Time window size in seconds.
+
+        Returns:
+            pd.DataFrame: Time-indexed Voronoi areas per individual.
+        """
         # nseconds = 1
         start = min(position_data.time)
         end = start + time_step
@@ -156,29 +223,19 @@ class OutlierSDMining(object):
 
 def voronoi_finite_polygons_2d(vor, radius=None):
     """
-    Reconstruct infinite voronoi regions in a 2D diagram to finite
-    regions.
+    Reconstructs infinite Voronoi regions in 2D to finite ones.
 
-    Code credits: Pauli Virtanen https://gist.github.com/pv/8036995
+    Code adapted from: https://gist.github.com/pv/8036995
 
-    Parameters
-    ----------
-    vor : Voronoi
-        Input diagram
-    radius : float, optional
-        Distance to 'points at infinity'.
+    Parameters:
+        vor (scipy.spatial.Voronoi): Input Voronoi diagram.
+        radius (float, optional): Distance to 'points at infinity'.
 
-    Returns
-    -------
-    regions : list of tuples
-        Indices of vertices in each revised Voronoi regions.
-    vertices : list of tuples
-        Coordinates for revised Voronoi vertices. Same as coordinates
-        of input vertices, with 'points at infinity' appended to the
-        end.
-
+    Returns:
+        Tuple[List[List[int]], np.ndarray]:
+            - List of region vertex indices (clipped to finite polygons).
+            - Array of polygon vertices.
     """
-
     if vor.points.shape[1] != 2:
         raise ValueError("Requires 2D input")
 
@@ -242,6 +299,16 @@ def voronoi_finite_polygons_2d(vor, radius=None):
 
 
 def setAtts(dataset, atts):
+    """
+    Converts a dataset into transactions based on selected attributes.
+
+    Parameters:
+        dataset (pd.DataFrame): DataFrame with entity rows and named attributes.
+        atts (List[str]): List of attribute column names to encode.
+
+    Returns:
+        List[List[NominalSelector]]: One list of selectors per row.
+    """
     ids = dataset.id.unique()
     transactions = []
     tr = []
@@ -258,6 +325,17 @@ def setAtts(dataset, atts):
 
 
 def idsInP(dataset, P, target):
+    """
+    Filters rows matching a pattern and computes the average target value.
+
+    Parameters:
+        dataset (pd.DataFrame): DataFrame with data to filter.
+        P (List[NominalSelector]): Pattern of attribute-value conditions.
+        target (str): Column name for the target variable (e.g., 'lof' or 'area').
+
+    Returns:
+        NoGPattern: A pattern object with matching IDs and computed weight.
+    """
     pids = []
     wsum = 0
 
@@ -296,6 +374,17 @@ def idsInP(dataset, P, target):
 
 # Measure quality of subgroups
 def qs_nodes_aux(dataframe, eids, target):
+    """
+    Computes the mean target value for a list of entity IDs.
+
+    Parameters:
+        dataframe (pd.DataFrame): Source data.
+        eids (List[int]): List of row indices.
+        target (str): Target column to average.
+
+    Returns:
+        float: Mean target value.
+    """
     wsum = 0
 
     for index, row in dataframe.iloc[eids, :].iterrows():
@@ -305,6 +394,19 @@ def qs_nodes_aux(dataframe, eids, target):
 
 
 def qs_nodes(dataset, P, freq, nsamples, target):
+    """
+    Evaluates pattern quality using Monte Carlo sampling over entities.
+
+    Parameters:
+        dataset (pd.DataFrame): Full dataset.
+        P (List[NominalSelector]): Pattern conditions.
+        freq (int): Frequency of the pattern (not used).
+        nsamples (int): Number of random samples for null distribution.
+        target (str): Target variable for quality scoring.
+
+    Returns:
+        NoGPattern: Pattern object with quality score set.
+    """
     pat = idsInP(dataset, P, target)
     # print('edges ', len(edges))
 
@@ -340,6 +442,18 @@ def qs_nodes(dataset, P, freq, nsamples, target):
 
 
 def treeQuality_nodes(dataset, nodes, target):
+    """
+    Applies `qs_nodes` to a set of pattern nodes and computes their quality scores.
+
+    Parameters:
+        dataset (pd.DataFrame): The full dataset of entities and attributes.
+        nodes (dict): Dictionary where keys are patterns (List[NominalSelector])
+                      and values are frequencies.
+        target (str): Name of the column to evaluate (e.g., 'lof', 'area').
+
+    Returns:
+        List[NoGPattern]: List of patterns with computed quality scores.
+    """
     dataset2 = dataset.copy()
     dataset2 = dataset2.reset_index()
     qs = []

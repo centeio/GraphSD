@@ -2,17 +2,37 @@ import matplotlib.pyplot as plt
 import networkx as nx
 
 
-def graphViz(graph, width=1):
+def graphViz(graph, width=4):
+    """
+    Plots the input graph using a circular layout.
+
+    Parameters:
+        graph (nx.Graph): The graph to visualize.
+        width (float): The width of the edges in the plot.
+
+    Returns:
+        None
+    """
     ecolors = list(nx.get_edge_attributes(graph, 'weight').values())
     pos = nx.circular_layout(graph)
     nx.draw(graph, pos, edge_color=ecolors,
-            width=4, edge_cmap=plt.cm.Blues, with_labels=True, cmap=plt.cm.Reds, figsize=(20, 20))
+            width=width, edge_cmap=plt.cm.Blues, with_labels=True, cmap=plt.cm.Reds, figsize=(20, 20))
 
     plt.figure(figsize=(5, 5))
     plt.show()
 
 
 def filterEdges(graph, n_bins):
+    """
+    Filters and returns only the edges in the highest weight bin.
+
+    Parameters:
+        graph (nx.Graph): The weighted graph.
+        n_bins (int): The number of bins to use for edge weights.
+
+    Returns:
+        nx.Graph: Subgraph with only top-weighted edges.
+    """
     subedges = []
     weights_bins = get_bins(n_bins, [edict['weight'] for e1, e2, edict in list(graph.edges(data=True))])
     i = 0
@@ -25,6 +45,17 @@ def filterEdges(graph, n_bins):
 
 
 def displayGender(graph, ids, socialData, shifth=2, shiftv=0, filter=0, width=1):
+    """
+    Visualizes the graph with nodes colored by gender.
+
+    Parameters:
+        graph (nx.Graph): The graph to display.
+        ids (list): Node IDs.
+        data (pd.DataFrame): DataFrame containing a 'gender' column.
+
+    Returns:
+        None
+    """
     # TODO debug filter edges
     # if filter != 0:
     #   graph = graph.edge_subgraph(filterEdges(graph, filter))
@@ -55,6 +86,17 @@ def displayGender(graph, ids, socialData, shifth=2, shiftv=0, filter=0, width=1)
 
 
 def attHist(attribute, value, bins=5):
+    """
+    Plots a histogram of edge weights for edges that match a given attribute value.
+
+    Parameters:
+        attribute (str): Edge attribute to filter by.
+        value (Any): Value of the attribute to match.
+        bins (int): Number of histogram bins.
+
+    Returns:
+        None
+    """
     list_edges = []
     wsum = 0
     count = 0
@@ -72,6 +114,18 @@ def attHist(attribute, value, bins=5):
 
 
 def printpositions(dataset, ids, initialDate, finalDate):  # colors in RGB 0-255
+    """
+    Animates the spatial positions of a set of IDs over time using Plotly.
+
+    Parameters:
+        dataset (dict): Time-indexed dictionary of DataFrames with 'id', 'x', 'y'.
+        ids (list): List of IDs to include.
+        initialDate (str): Start timestamp.
+        finalDate (str): End timestamp.
+
+    Returns:
+        None
+    """
     # cmapb = plt.cm.Blues
     # cmapb = cmapb(list(nx.get_edge_attributes(G,'weight').values()))
     cmapr = plt.cm.Reds
@@ -230,6 +284,17 @@ def printpositions(dataset, ids, initialDate, finalDate):  # colors in RGB 0-255
 
 
 def printpositionsG(G, initialDate, finalDate):  # colors in RGB 0-255
+    """
+    Animates positions and gender attributes of nodes in graph G over time.
+
+    Parameters:
+        G (nx.Graph): Graph object with node positions at each timestamp.
+        initialDate (str): Start of animation period.
+        finalDate (str): End of animation period.
+
+    Returns:
+        None
+    """
     cmapb = plt.cm.Blues
     cmapb = cmapb(list((socialData.set_index("id").reindex(ids).Gender == 'F') + 0))
     gender = socialData.set_index("id").reindex(ids).Gender

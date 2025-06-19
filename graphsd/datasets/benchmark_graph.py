@@ -1,3 +1,6 @@
+"""
+Defines a small benchmark directed graph and associated social attributes for testing or demonstration.
+"""
 import pandas as pd
 
 digraph1 = {
