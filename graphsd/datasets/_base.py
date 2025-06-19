@@ -1,7 +1,7 @@
 import pandas as pd
-from os.path import dirname
+from pathlib import Path
 
-module_path = dirname(__file__)
+module_path = Path(__file__).parent
 
 
 def load_playground_a():
@@ -11,8 +11,8 @@ def load_playground_a():
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame]: Position data and social metadata.
     """
-    position_data = pd.read_csv(module_path + "./data/playground_a_position_data_anonymized.csv")
-    social_data = pd.read_csv(module_path + "./data/playground_a_social_data_anonymized.csv")
+    position_data = pd.read_csv(module_path / "data/playground_a_position_data_anonymized.csv")
+    social_data = pd.read_csv(module_path / "data/playground_a_social_data_anonymized.csv")
 
     return position_data, social_data
 

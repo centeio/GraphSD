@@ -1,446 +1,64 @@
 import matplotlib.pyplot as plt
 import networkx as nx
+from typing import Optional, Callable, Any
 
-
-def graphViz(graph, width=4):
+def graph_viz(
+        graph: nx.Graph,
+        layout: Optional[Callable[[nx.Graph], dict]] = None,
+        width: float = 2.0,
+        node_size: int = 300,
+        node_color: str = "skyblue",
+        edge_color_attr: Optional[str] = "weight",
+        edge_cmap: Any = plt.cm.Blues,
+        with_labels: bool = True,
+        figsize: tuple = (6, 6),
+        title: Optional[str] = None,
+) -> None:
     """
-    Plots the input graph using a circular layout.
+    Visualize a graph with customizable layout and styling options.
 
-    Parameters:
+    Args:
         graph (nx.Graph): The graph to visualize.
-        width (float): The width of the edges in the plot.
+        layout (Callable, optional): A layout function from NetworkX (e.g., nx.spring_layout).
+                                     Defaults to circular layout if not provided.
+        width (float): Width of the edges.
+        node_size (int): Size of the nodes.
+        node_color (str): Color of the nodes.
+        edge_color_attr (str, optional): Edge attribute to use for coloring. If None, all edges are same color.
+        edge_cmap (Colormap): Colormap for edge coloring.
+        with_labels (bool): Whether to show node labels.
+        figsize (tuple): Size of the plot figure.
+        title (str, optional): Optional plot title.
 
     Returns:
         None
     """
-    ecolors = list(nx.get_edge_attributes(graph, 'weight').values())
-    pos = nx.circular_layout(graph)
-    nx.draw(graph, pos, edge_color=ecolors,
-            width=width, edge_cmap=plt.cm.Blues, with_labels=True, cmap=plt.cm.Reds, figsize=(20, 20))
+    # Determine node positions
+    pos = layout(graph) if layout else nx.circular_layout(graph)
 
-    plt.figure(figsize=(5, 5))
+    # Determine edge colors
+    if edge_color_attr:
+        edge_attrs = nx.get_edge_attributes(graph, edge_color_attr)
+        edge_colors = list(edge_attrs.values())
+    else:
+        edge_colors = "gray"
+
+    # Plotting
+    plt.figure(figsize=figsize)
+    nx.draw(
+        graph,
+        pos,
+        node_size=node_size,
+        node_color=node_color,
+        edge_color=edge_colors,
+        width=width,
+        edge_cmap=edge_cmap,
+        with_labels=with_labels,
+    )
+
+    if title:
+        plt.title(title)
+
+    plt.axis("off")
+    plt.tight_layout()
     plt.show()
-
-
-def filterEdges(graph, n_bins):
-    """
-    Filters and returns only the edges in the highest weight bin.
-
-    Parameters:
-        graph (nx.Graph): The weighted graph.
-        n_bins (int): The number of bins to use for edge weights.
-
-    Returns:
-        nx.Graph: Subgraph with only top-weighted edges.
-    """
-    subedges = []
-    weights_bins = get_bins(n_bins, [edict['weight'] for e1, e2, edict in list(graph.edges(data=True))])
-    i = 0
-    for eid in list(graph.edges()):
-        if weights_bins[i] == (n_bins - 1):
-            subedges += [eid]
-        i += 1
-    print(subedges)
-    return subedges
-
-
-def displayGender(graph, ids, socialData, shifth=2, shiftv=0, filter=0, width=1):
-    """
-    Visualizes the graph with nodes colored by gender.
-
-    Parameters:
-        graph (nx.Graph): The graph to display.
-        ids (list): Node IDs.
-        data (pd.DataFrame): DataFrame containing a 'gender' column.
-
-    Returns:
-        None
-    """
-    # TODO debug filter edges
-    # if filter != 0:
-    #   graph = graph.edge_subgraph(filterEdges(graph, filter))
-    #   print(list(graph.edges(data=True)))
-
-    subgraphF = graph.subgraph([nid for nid in ids if (socialData.query("id==@nid").Gender.item() == 'F')])
-    subgraphM = graph.subgraph([nid for nid in ids if (socialData.query("id==@nid").Gender.item() == 'M')])
-
-    posF = nx.circular_layout(subgraphF)
-    posM = nx.circular_layout(subgraphM)
-
-    for val in posF:
-        posF[val][0] = posF[val][0] - shifth
-        posF[val][1] = posF[val][1] - shiftv
-    for val in posM:
-        posM[val][0] = posM[val][0] + shifth
-        posM[val][1] = posM[val][1] + shiftv
-
-    pos = {**posF, **posM}
-
-    ecolors = list(nx.get_edge_attributes(graph, 'weight').values())
-    ncolors = [0.4 if socialData.query("id==@nid").Gender.item() == 'F' else 0.5 for nid in ids]
-
-    nx.draw(graph, pos, node_color=ncolors, edge_color=ecolors,
-            width=width, edge_cmap=plt.cm.Blues, with_labels=True, cmap=plt.cm.Reds, figsize=(20, 20))
-
-    plt.show()
-
-
-def attHist(attribute, value, bins=5):
-    """
-    Plots a histogram of edge weights for edges that match a given attribute value.
-
-    Parameters:
-        attribute (str): Edge attribute to filter by.
-        value (Any): Value of the attribute to match.
-        bins (int): Number of histogram bins.
-
-    Returns:
-        None
-    """
-    list_edges = []
-    wsum = 0
-    count = 0
-
-    for nid1, nid2, edict in list(GComp.edges(data=True)):
-        if edict[attribute] == value:
-            list_edges += [edict['weight']]
-            wsum += edict['weight']
-            count += 1
-
-    print('mean: ', wsum / count)
-
-    list_edges
-    plt.hist(list_edges, bins)
-
-
-def printpositions(dataset, ids, initialDate, finalDate):  # colors in RGB 0-255
-    """
-    Animates the spatial positions of a set of IDs over time using Plotly.
-
-    Parameters:
-        dataset (dict): Time-indexed dictionary of DataFrames with 'id', 'x', 'y'.
-        ids (list): List of IDs to include.
-        initialDate (str): Start timestamp.
-        finalDate (str): End timestamp.
-
-    Returns:
-        None
-    """
-    # cmapb = plt.cm.Blues
-    # cmapb = cmapb(list(nx.get_edge_attributes(G,'weight').values()))
-    cmapr = plt.cm.Reds
-    weights = list(range(len(ids)))
-    max_id = max(weights)
-    rangec = [x / max_id for x in weights]
-    ncolor = cmapr(rangec)
-
-    dates = []
-
-    start_window = pd.Timestamp(initialDate)
-    nseconds = 1
-
-    while start_window <= pd.Timestamp(finalDate):
-        dates += [str(start_window)]
-        # coords = after18[str(start_window)][['id','x','y']].set_index("id").reindex(ids).reset_index()[['x','y']]
-        # compute distances
-        # np.nan_to_num(dists)
-        start_window = start_window + pd.Timedelta(seconds=nseconds)
-
-    start_window = pd.Timestamp(initialDate)
-
-    # make figure
-    figure = {
-        'data': [],
-        'layout': {},
-        'frames': []
-    }
-
-    # fill in most of layout
-    # figure['layout']['xaxis'] = {'range': [30, 85], 'title': 'X'}
-    figure['layout']['xaxis'] = {'title': 'X'}
-    figure['layout']['yaxis'] = {'title': 'Y'}
-    figure['layout']['hovermode'] = 'closest'
-    figure['layout']['sliders'] = {
-        'args': [
-            'transition', {
-                'duration': 400,
-                'easing': 'cubic-in-out'
-            }
-        ],
-        'initialValue': initialDate,
-        'plotlycommand': 'animate',
-        'values': dates,
-        'visible': True
-    }
-    figure['layout']['updatemenus'] = [
-        {
-            'buttons': [
-                {
-                    'args': [None, {'frame': {'duration': 500, 'redraw': False},
-                                    'fromcurrent': True,
-                                    'transition': {'duration': 300, 'easing': 'quadratic-in-out'}}],
-                    'label': 'Play',
-                    'method': 'animate'
-                },
-                {
-                    'args': [[None], {'frame': {'duration': 0, 'redraw': False}, 'mode': 'immediate',
-                                      'transition': {'duration': 0}}],
-                    'label': 'Pause',
-                    'method': 'animate'
-                }
-            ],
-            'direction': 'left',
-            'pad': {'r': 10, 't': 87},
-            'showactive': False,
-            'type': 'buttons',
-            'x': 0.1,
-            'xanchor': 'right',
-            'y': 0,
-            'yanchor': 'top'
-        }
-    ]
-
-    sliders_dict = {
-        'active': 0,
-        'yanchor': 'top',
-        'xanchor': 'left',
-        'currentvalue': {
-            'font': {'size': 10},
-            'prefix': 'Timestamp:',
-            'visible': True,
-            'xanchor': 'right'
-        },
-        'transition': {'duration': 300, 'easing': 'cubic-in-out'},
-        'pad': {'b': 10, 't': 50},
-        'len': 0.9,
-        'x': 0.1,
-        'y': 0,
-        'steps': []
-    }
-
-    # make data
-    colcounter = 0
-    for nid in ids:
-        dataset_by_ts = dataset[str(start_window)].set_index("id").reindex(ids).reset_index()
-        dataset_by_ts_and_id = dataset_by_ts[dataset_by_ts['id'] == nid]
-
-        data_dict = {
-            'x': list(dataset_by_ts_and_id['x']),
-            'y': list(dataset_by_ts_and_id['y']),
-            'mode': 'markers',
-            'text': list(dataset_by_ts_and_id['id']),
-            'marker': {
-                'sizemode': 'area',
-                'sizeref': 200000,
-                'size': 10,
-                'color': 'rgb(' + str(round(ncolor[colcounter][0] * 255)) + ',' + str(
-                    round(ncolor[colcounter][1] * 255)) + ',' + str(round(ncolor[colcounter][2] * 255)) + ')'
-            },
-            'name': nid
-        }
-        figure['data'].append(data_dict)
-        colcounter += 1
-
-    # make frames
-    for ts in dates:
-        frame = {'data': [], 'name': str(ts)}
-
-        colcounter = 0
-        for nid in ids:
-            dataset_by_ts = dataset[ts].set_index("id").reindex(ids).reset_index()
-            dataset_by_ts_and_id = dataset_by_ts[dataset_by_ts['id'] == nid]
-
-            data_dict = {
-                'x': list(dataset_by_ts_and_id['x']),
-                'y': list(dataset_by_ts_and_id['y']),
-                'mode': 'markers',
-                'text': list(dataset_by_ts_and_id['id']),
-                'marker': {
-                    'sizemode': 'area',
-                    'sizeref': 200000,
-                    'size': 10,
-                    'color': 'rgb(' + str(round(ncolor[colcounter][0] * 255)) + ',' + str(
-                        round(ncolor[colcounter][1] * 255)) + ',' + str(round(ncolor[colcounter][2] * 255)) + ')'
-                },
-                'name': nid
-            }
-            frame['data'].append(data_dict)
-            colcounter += 1
-
-        figure['frames'].append(frame)
-        slider_step = {'args': [
-            [ts],
-            {'frame': {'duration': 200, 'redraw': False},
-             'mode': 'immediate',
-             'transition': {'duration': 200}}
-        ],
-            'label': ts,
-            'method': 'animate'}
-        sliders_dict['steps'].append(slider_step)
-
-    figure['layout']['sliders'] = [sliders_dict]
-
-    iplot(figure)
-
-
-def printpositionsG(G, initialDate, finalDate):  # colors in RGB 0-255
-    """
-    Animates positions and gender attributes of nodes in graph G over time.
-
-    Parameters:
-        G (nx.Graph): Graph object with node positions at each timestamp.
-        initialDate (str): Start of animation period.
-        finalDate (str): End of animation period.
-
-    Returns:
-        None
-    """
-    cmapb = plt.cm.Blues
-    cmapb = cmapb(list((socialData.set_index("id").reindex(ids).Gender == 'F') + 0))
-    gender = socialData.set_index("id").reindex(ids).Gender
-
-    dates = []
-
-    start_window = pd.Timestamp(initialDate)
-    nseconds = 1
-
-    while start_window <= pd.Timestamp(finalDate):
-        dates += [str(start_window)]
-        # coords = after18[str(start_window)][['id','x','y']].set_index("id").reindex(ids).reset_index()[['x','y']]
-        # compute distances
-        # np.nan_to_num(dists)
-        start_window = start_window + pd.Timedelta(seconds=nseconds)
-
-    # make figure
-    figure = {
-        'data': [],
-        'layout': {},
-        'frames': []
-    }
-
-    # fill in most of layout
-    # figure['layout']['xaxis'] = {'range': [30, 85], 'title': 'X'}
-    figure['layout']['xaxis'] = {'title': 'X'}
-    figure['layout']['yaxis'] = {'title': 'Y'}
-    figure['layout']['hovermode'] = 'closest'
-    figure['layout']['sliders'] = {
-        'args': [
-            'transition', {
-                'duration': 400,
-                'easing': 'cubic-in-out'
-            }
-        ],
-        'initialValue': initialDate,
-        'plotlycommand': 'animate',
-        'values': dates,
-        'visible': True
-    }
-    figure['layout']['updatemenus'] = [
-        {
-            'buttons': [
-                {
-                    'args': [None, {'frame': {'duration': 500, 'redraw': False},
-                                    'fromcurrent': True,
-                                    'transition': {'duration': 300, 'easing': 'quadratic-in-out'}}],
-                    'label': 'Play',
-                    'method': 'animate'
-                },
-                {
-                    'args': [[None], {'frame': {'duration': 0, 'redraw': False}, 'mode': 'immediate',
-                                      'transition': {'duration': 0}}],
-                    'label': 'Pause',
-                    'method': 'animate'
-                }
-            ],
-            'direction': 'left',
-            'pad': {'r': 10, 't': 87},
-            'showactive': False,
-            'type': 'buttons',
-            'x': 0.1,
-            'xanchor': 'right',
-            'y': 0,
-            'yanchor': 'top'
-        }
-    ]
-
-    sliders_dict = {
-        'active': 0,
-        'yanchor': 'top',
-        'xanchor': 'left',
-        'currentvalue': {
-            'font': {'size': 10},
-            'prefix': 'Timestamp:',
-            'visible': True,
-            'xanchor': 'right'
-        },
-        'transition': {'duration': 300, 'easing': 'cubic-in-out'},
-        'pad': {'b': 10, 't': 50},
-        'len': 0.9,
-        'x': 0.1,
-        'y': 0,
-        'steps': []
-    }
-
-    # make data
-    colcounter = 0
-    for nid in ids:
-        dataset_by_ts = after18[str(start_window)].set_index("id").reindex(ids).reset_index()
-        dataset_by_ts_and_id = dataset_by_ts[dataset_by_ts['id'] == nid]
-
-        data_dict = {
-            'x': list(dataset_by_ts_and_id['x']),
-            'y': list(dataset_by_ts_and_id['y']),
-            'mode': 'markers',
-            'text': gender[nid],
-            'marker': {
-                'sizemode': 'area',
-                'sizeref': 200000,
-                'size': 10,
-                'color': 'rgb(' + str(round(colors[colcounter][0] * 255)) + ',' + str(
-                    round(colors[colcounter][1] * 255)) + ',' + str(round(colors[colcounter][2] * 255)) + ')'
-            },
-            'name': nid
-        }
-        figure['data'].append(data_dict)
-        colcounter += 1
-
-    # make frames
-    for ts in dates:
-        frame = {'data': [], 'name': str(ts)}
-
-        colcounter = 0
-        for nid in ids:
-            dataset_by_ts = after18[ts].set_index("id").reindex(ids).reset_index()
-            dataset_by_ts_and_id = dataset_by_ts[dataset_by_ts['id'] == nid]
-
-            data_dict = {
-                'x': list(dataset_by_ts_and_id['x']),
-                'y': list(dataset_by_ts_and_id['y']),
-                'mode': 'markers',
-                'text': gender[nid],
-                'marker': {
-                    'sizemode': 'area',
-                    'sizeref': 200000,
-                    'size': 10,
-                    'color': 'rgb(' + str(round(colors[colcounter][0] * 255)) + ',' + str(
-                        round(colors[colcounter][1] * 255)) + ',' + str(round(colors[colcounter][2] * 255)) + ')'
-                },
-                'name': nid
-            }
-            frame['data'].append(data_dict)
-            colcounter += 1
-
-        figure['frames'].append(frame)
-        slider_step = {'args': [
-            [ts],
-            {'frame': {'duration': 50, 'redraw': False},
-             'mode': 'immediate',
-             'transition': {'duration': 1}}
-        ],
-            'label': ts,
-            'method': 'animate'}
-        sliders_dict['steps'].append(slider_step)
-
-    figure['layout']['sliders'] = [sliders_dict]
-
-    iplot(figure)

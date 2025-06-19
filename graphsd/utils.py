@@ -68,15 +68,15 @@ class NoGPattern:
 
         Attributes:
             name (List[NominalSelector]): List of conditions.
-            pids (Set[Any]): Set of entity IDs matching the pattern.
+            ids (Set[Any]): Set of entity IDs matching the pattern.
             weight (float): Mean weight.
             quality (float): Pattern's quality score.
     """
-    def __init__(self, name, pids, weight):  # name has to be of type list of NominalSelector
+    def __init__(self, name, ids, weight):  # name has to be of type list of NominalSelector
         self.name = name
         self.weight = weight
         self.quality = 0
-        self.ids = pids
+        self.ids = ids
 
     def __repr__(self):
         return str(self.name)
@@ -96,7 +96,7 @@ def make_bins(dataframe, n_bins=3):
         Discretizes numeric columns of a DataFrame into bins.
 
         Parameters:
-            df (pd.DataFrame): DataFrame with numeric columns.
+            dataframe (pd.DataFrame): DataFrame with numeric columns.
             n_bins (int): Number of bins to use.
 
         Returns:
@@ -190,7 +190,7 @@ def addVelXY(dataframe):  # has to be sorted ascending by timestamp!!
         Adds velocity in X and Y direction to a trajectory DataFrame.
 
         Parameters:
-            df (pd.DataFrame): DataFrame containing 'x' and 'y' columns representing position.
+            dataframe (pd.DataFrame): DataFrame containing 'x' and 'y' columns representing position.
 
         Returns:
             pd.DataFrame: The same DataFrame with added 'velX' and 'velY' columns.
