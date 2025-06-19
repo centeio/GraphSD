@@ -3,6 +3,13 @@ import pandas as pd
 
 
 class NominalSelector:
+    """
+        Represents a nominal selector used in pattern descriptions for subgroup discovery.
+
+        Attributes:
+            att (str): Attribute name.
+            val (Any): Attribute value.
+    """
     def __init__(self, attribute, value):
         self.attribute = attribute
         self.value = value
