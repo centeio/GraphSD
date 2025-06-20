@@ -1,32 +1,33 @@
-from multiprocessing import Pool
-from multiprocessing.dummy import Pool as ThreadPool
-from typing import List
+from typing import List, Dict, Tuple, Any, Optional
 
 import networkx as nx
 import numpy as np
 import pandas as pd
+from joblib import Parallel, delayed
+from mlxtend.frequent_patterns import fpgrowth
+from mlxtend.preprocessing import TransactionEncoder
 from networkx import Graph, DiGraph, MultiGraph, MultiDiGraph
-from orangecontrib.associate.fpgrowth import frequent_itemsets
 
-from graphsd.graph import count_interactions_digraph, count_interactions_multi_digraph, count_interactions, getWEdges
-from graphsd.utils import Pattern, NominalSelector, compute_velocities
+from graphsd.patterns import Pattern, NominalSelector
+from graphsd.utils import compute_velocities, count_interactions
 
 
 class GraphSDMiningBase(object):
     """
-        Base class for subgroup discovery on graphs. Handles graph construction, attribute assignment,
-        pattern discovery, and quality scoring.
+    Base class for subgroup discovery on graphs. Handles graph construction, attribute assignment,
+    pattern discovery, and quality scoring.
 
-        Attributes:
-            graph (nx.Graph): The graph to mine.
-            social_data (pd.DataFrame): Attributes used to annotate edges.
-            n_bins (int): Number of bins for discretization.
-            n_samples (int): Number of samples for statistical testing.
-            metric (str): Quality metric ('mean' or 'var').
-            mode (str): Attribute assignment mode ('to', 'from', 'comparison').
-            random_state (int): Random seed.
-            n_jobs (int): Number of parallel jobs.
+    Attributes:
+        graph (nx.Graph): The graph to mine.
+        social_data (pd.DataFrame): Attributes used to annotate edges.
+        n_bins (int): Number of bins for discretization.
+        n_samples (int): Number of samples for statistical testing.
+        metric (str): Quality metric ('mean' or 'var').
+        mode (str): Attribute assignment mode ('to', 'from', 'comparison').
+        random_state (int): Random seed.
+        n_jobs (int): Number of parallel jobs.
     """
+
     def __init__(self,
                  n_bins=3,
                  n_samples=100,
@@ -40,6 +41,7 @@ class GraphSDMiningBase(object):
         self.metric = metric
         self.mode = mode
         self.random_state = random_state
+        self.npr = np.random.RandomState(self.random_state)
         self.n_jobs = n_jobs
 
         self.graph = None
@@ -49,49 +51,32 @@ class GraphSDMiningBase(object):
         self.multi = False
 
     @staticmethod
-    def get_frequent_items(transactions, min_support):
+    def get_frequent_items(
+            transactions: List[List[NominalSelector]],
+            min_support: float
+    ) -> Dict[Tuple[NominalSelector, ...], int]:
         """
-            Computes frequent itemsets from transaction data using FP-growth.
+        Computes frequent itemsets from transactions using FP-Growth via mlxtend.
 
-            Parameters:
-                transactions (List[List[str]]): List of attribute-value transactions.
-                min_support (float): Minimum support threshold (0–1).
+        Parameters:
+            transactions (List[List[NominalSelector]]): Lists of NominalSelector items per transaction.
+            min_support (float): Minimum support (as a proportion between 0 and 1).
 
-            Returns:
-                Dict[Tuple[str], int]: Frequent itemsets with their support counts.
+        Returns:
+            Dict[Tuple[NominalSelector, ...], int]: Frequent itemsets and their absolute support counts.
         """
-        transactions_dict = {}
-        last = 1
-        transactions_as_int = []
+        te = TransactionEncoder()
+        encoded = te.fit(transactions).transform(transactions)
+        df = pd.DataFrame(encoded, columns=te.columns_)
 
-        for trans in transactions:
-            temp = []
-            for att in trans:
-                if att not in transactions_dict:
-                    transactions_dict[att] = last
-                    last += 1
-                temp += [transactions_dict[att]]
-            transactions_as_int += [temp]
+        itemsets_df = fpgrowth(df, min_support=min_support, use_colnames=True)
 
-        transactions_dict = {v: k for k, v in transactions_dict.items()}
+        return {
+            tuple(itemset): int(support * len(transactions))
+            for itemset, support in zip(itemsets_df['itemsets'], itemsets_df['support'])
+        }
 
-        itemsets = list(frequent_itemsets(transactions_as_int, min_support=min_support))
-
-        frequent_items = {}
-        for itemset, support in itemsets:
-            first = True
-            for n in itemset:
-                if first:
-                    temp = (transactions_dict[n],)
-                    first = False
-                else:
-                    temp += (transactions_dict[n],)
-
-            frequent_items[temp] = support
-
-        return frequent_items
-
-    def _get_transactions(self, mode):
+    def _get_transactions(self, mode: str) -> List[List[NominalSelector]]:
         """
             Placeholder for graph-specific transaction conversion method.
 
@@ -103,156 +88,257 @@ class GraphSDMiningBase(object):
         """
         pass
 
-    def subgroup_discovery(self, mode="comparison", min_support=0.10, metric='mean', quality_measure='qS'):
+    def _create_graph(self, edge_list: List[Tuple[int, int, Dict[str, Any]]]) -> None:
         """
-            Performs subgroup discovery by mining frequent patterns and evaluating their quality.
+        Builds a NetworkX graph using the declared graph type and edge list.
 
-            Parameters:
-                mode (str): Attribute assignment mode ('to', 'from', or 'comparison').
-                min_support (float): Minimum support threshold for frequent itemsets.
-                metric (str): Quality evaluation metric ('mean' or 'var').
-                quality_measure (str): Quality scoring method ('qS' or 'qP').
+        Parameters:
+            edge_list (List[Tuple[int, int, Dict[str, Any]]]): Edge data with 'weight' or other attributes.
 
-            Returns:
-                List[Pattern]: Ranked list of patterns with quality scores.
+        Returns:
+            None
         """
-        # TODO: random_state is not working
-        np.random.seed(self.random_state)
-        transactions = self._get_transactions(mode)
-        frequent_itemset = self.get_frequent_items(transactions, min_support)
+        G = self.graph_type()
+        G.add_edges_from(edge_list)
+        self.graph = G
 
-        if quality_measure in ['qP', 'qS']:
-            quality_function = self.quality_measure_base
-        # elif quality_measure == 'new_qm']::
-            # Refer to alternative quality measures here
-            # self.measure_score = self.measure_score
+        n = G.number_of_nodes()
+        if isinstance(G, nx.DiGraph) or isinstance(G, nx.MultiDiGraph):
+            self.graph.max_edges = n * (n - 1)
         else:
-            msg = "Unknown quality function. Current ones are: ['qP','qS']"
-            ValueError(msg)
+            self.graph.max_edges = n * (n - 1) // 2
+
+        if self.multi:
+            self.graph.max_edges += self.count_edges(G)
+
+    def read_data(
+            self,
+            position_data: pd.DataFrame,
+            social_data: pd.DataFrame,
+            time_step: int = 10,
+            proximity: float = 1.0
+    ) -> None:
+        """
+        Processes positional data into a proximity-based interaction graph.
+
+        Parameters:
+            position_data (pd.DataFrame): Includes 'id', 'x', 'y', 'time'. Velocities will be computed if needed.
+            social_data (Any): Optional metadata.
+            time_step (int): Time window size for interaction aggregation.
+            proximity (float): Max spatial distance for interactions.
+
+        Returns:
+            None
+        """
+        directed = issubclass(self.graph_type, (nx.DiGraph, nx.MultiDiGraph))
+        include_all = self.multi
+
+        if directed:
+            position_data = compute_velocities(position_data)
+
+        edge_list = count_interactions(
+            position_data,
+            proximity=proximity,
+            time_step=time_step,
+            directed=directed,
+            include_all_pairs=include_all
+        )
+
+        self._create_graph(edge_list)
+        self.social_data = social_data
+
+    @staticmethod
+    def _evaluate_quality(args):
+        quality_fn, itemset, metric, quality_measure = args
+        return quality_fn(itemset, metric, quality_measure)
+
+    def subgroup_discovery(
+            self,
+            mode: str = "comparison",
+            min_support: float = 0.1,
+            metric: str = "mean",
+            quality_measure: str = "qS"
+    ) -> List[Pattern]:
+        """
+        Discovers high-quality subgroups based on frequent patterns and interaction quality.
+
+        Parameters:
+            mode (str): Strategy for extracting attribute transactions ('comparison', 'composition', etc.)
+            min_support (float): Minimum frequency threshold (0 < s ≤ 1).
+            metric (str): Target metric to evaluate subgraphs ('mean', 'var', etc.)
+            quality_measure (str): Quality function to use ('qS', 'qP', etc.)
+
+        Returns:
+            List[Pattern]: Sorted list of patterns ranked by quality.
+        """
+        np.random.seed(self.random_state)
+
+        transactions = self._get_transactions(mode)
+        itemsets = self.get_frequent_items(transactions, min_support)
+
+        if not itemsets:
+            return []
 
         if self.n_jobs > 1:
-            pool = Pool(self.n_jobs)
-            subgroups = []
-            for frequent_items, _ in frequent_itemset.items():
-                pool.apply_async(quality_function, args=(frequent_items, metric, quality_measure),
-                                 callback=subgroups.append)
-            pool.close()
-            pool.join()
+            results = Parallel(n_jobs=self.n_jobs)(
+                delayed(self.quality_measure_base)(itemset, metric, quality_measure)
+                for itemset in itemsets
+            )
         else:
-            subgroups = [quality_function(frequent_items, metric=metric, measure_type=quality_measure)
-                         for frequent_items, _ in frequent_itemset.items()]
+            results = [self.quality_measure_base(itemset, metric, quality_measure) for itemset in itemsets]
 
-        subgroups.sort(reverse=True)
+        return sorted(results, key=lambda p: p.quality, reverse=True)
 
-        return subgroups
+    from typing import List, Tuple, Any
 
-    def quality_measure_base(self, pattern, metric, measure_type='qS'):
+    def extract_edge_keys(
+            self,
+            edges_with_data: List[Tuple]
+    ) -> List[Tuple]:
         """
-            Computes the quality score of a pattern's induced subgraph.
+        Extracts edge identifiers from edge tuples that include data dictionaries,
+        returning keys suitable for use with NetworkX's edge_subgraph() method.
 
-            Parameters:
-                pattern (Tuple[str]): Attribute-value selectors defining the pattern.
-                metric (str): Evaluation metric ('mean' or 'var').
-                measure_type (str): Quality scoring strategy ('qS' or 'qP').
+        This method supports both standard and multi-edge graph types.
 
-            Returns:
-                Pattern: A Pattern object containing the subgraph and computed quality.
+        Parameters:
+            edges_with_data (List[Tuple]): A list of edge tuples that include attributes.
+                - For standard graphs: (u, v, data)
+                - For multi-edge graphs: (u, v, key, data)
+
+        Returns:
+            List[Tuple]: A list of edge identifiers:
+                - (u, v) for Graph / DiGraph
+                - (u, v, key) for MultiGraph / MultiDiGraph
         """
-        graph_of_pattern = self.get_pattern_graph(pattern)
+        if self.multi:
+            return [(u, v, k) for u, v, k, _ in edges_with_data]
+        else:
+            return [(u, v) for u, v, _ in edges_with_data]
 
-        # The difference between the two quality measures is how they consider the maximum number of edges
+    def quality_measure_base(
+            self,
+            pattern: Tuple[NominalSelector, ...],
+            metric: str,
+            measure_type: str = "qS"
+    ) -> Pattern:
+        """
+        Computes the normalized quality score of a pattern's induced subgraph.
+
+        Parameters:
+            pattern (Tuple[str]): The selectors defining the subgroup pattern.
+            metric (str): Evaluation metric to apply to the subgraph ('mean', 'var', etc.).
+            measure_type (str): Quality scoring strategy ('qS' = structural, 'qP' = proportional).
+
+        Returns:
+            Pattern: A Pattern object containing the induced subgraph and its quality score.
+        """
+        raw_edges = self.get_edges_in_pattern(pattern)
+        edges = self.extract_edge_keys(raw_edges)
+        graph_of_pattern = self.graph.edge_subgraph(edges).copy()
+
         if measure_type == 'qS':
-            max_n_edges = self.graph.max_edges
             n_nodes = len(graph_of_pattern)
-            max_pattern_edges = float(n_nodes * (n_nodes - 1))  # number of all possible edges
+            max_pattern_edges = float(n_nodes * (n_nodes - 1))
             if self.multi:
                 max_pattern_edges += self.count_edges(graph_of_pattern)
         elif measure_type == 'qP':
-            max_n_edges = self.graph.size()
             max_pattern_edges = None
+        else:
+            raise ValueError(f"Unsupported quality measure: {measure_type}")
 
         score = self.measure_score(graph_of_pattern, metric, max_pattern_edges)
         subgroup = Pattern(pattern, graph_of_pattern, score)
 
-        mean, std = self.statistical_validation(self.n_samples,
-                                                max_n_edges=max_n_edges,
-                                                pattern_size=graph_of_pattern.number_of_edges(),
-                                                metric=metric,
-                                                max_pattern_edges=max_pattern_edges)
+        mean, std = self.statistical_validation(
+            n_samples=self.n_samples,
+            pattern_size=graph_of_pattern.number_of_edges(),
+            metric=metric,
+            max_pattern_edges=max_pattern_edges
+        )
 
         subgroup.quality = (subgroup.weight - mean) / std
 
         return subgroup
 
-    def statistical_validation(self, n_samples, max_n_edges, pattern_size, metric, max_pattern_edges):
+    def statistical_validation(
+            self,
+            n_samples: int,
+            pattern_size: int,
+            metric: str,
+            max_pattern_edges: float
+    ) -> Tuple[float, float]:
         """
-            Estimates mean and standard deviation of scores from random subgraphs for normalization.
+        Estimates the mean and standard deviation of a quality score under the null hypothesis,
+        by sampling random subgraphs with a fixed number of edges.
 
-            Parameters:
-                n_samples (int): Number of random samples to generate.
-                max_n_edges (int): Total number of possible edges in the graph.
-                pattern_size (int): Number of edges in the pattern's subgraph.
-                metric (str): Evaluation metric ('mean' or 'var').
-                max_pattern_edges (int): Theoretical maximum number of edges in the pattern.
+        Parameters:
+            n_samples (int): Number of random subgraphs to sample.
+            pattern_size (int): Number of edges in each sampled subgraph.
+            metric (str): Quality metric to compute ('mean', 'var').
+            max_pattern_edges (float): Normalization constant based on the pattern's node set.
 
-            Returns:
-                Tuple[float, float]: Mean and standard deviation of scores from random subgraphs.
+        Returns:
+            Tuple[float, float]: Mean and standard deviation of quality scores from sampled subgraphs.
         """
-        sample = []
+        list_of_edges = list(self.graph.edges(keys=True) if self.multi else self.graph.edges())
+        graph_size = len(list_of_edges)
 
-        pool = ThreadPool(2)
-        list_of_edges = list(self.graph.edges)
-        graph_size = self.graph.size()
+        def sample_and_score() -> float:
+            if graph_size < pattern_size:
+                return 0.0
 
-        for _ in range(n_samples):
-            # indexes = np.random.choice(range(interval), pattern_size, replace=False)
-            # random_edges = [list_of_edges[i] for i in indexes]
-            # TODO: Needs to be confirmed if commented version is the correct or not!
-            indexes = np.random.choice(range(max_n_edges), pattern_size, replace=False)
-            random_edges = [list_of_edges[i] for i in indexes if i < graph_size]
-            random_subgraph = self.graph.edge_subgraph(random_edges)
-            pool.apply_async(self.measure_score, args=(random_subgraph,
-                                                       metric,
-                                                       max_pattern_edges),
-                             callback=sample.append)
+            indices = self.npr.choice(graph_size, size=pattern_size, replace=False)
+            sampled_edges = [list_of_edges[i] for i in indices]
+            subgraph = self.graph.edge_subgraph(sampled_edges)
+            return self.measure_score(subgraph, metric, max_pattern_edges)
 
-        pool.close()
-        pool.join()
+        scores = (
+            Parallel(n_jobs=self.n_jobs)(
+                delayed(sample_and_score)() for _ in range(n_samples)
+            ) if self.n_jobs > 1 else
+            [sample_and_score() for _ in range(n_samples)]
+        )
 
-        mean = np.mean(sample)
-        std = np.std(sample)
-
-        return mean, std
+        return float(np.mean(scores)), float(np.std(scores))
 
     @staticmethod
-    def measure_score(graph_of_pattern, metric, max_pattern_edges=None):
+    def measure_score(
+            graph_of_pattern: nx.Graph,
+            metric: str,
+            max_pattern_edges: Optional[float] = None
+    ) -> float:
         """
-            Computes a numeric quality score for a given subgraph using the selected metric.
+        Computes a normalized quality score for a given subgraph using the specified metric.
 
-            Parameters:
-                graph_of_pattern (nx.Graph): Subgraph induced by the pattern.
-                metric (str): The scoring metric ('mean' or 'var').
-                max_pattern_edges (int, optional): Max number of edges used for normalization.
+        Parameters:
+            graph_of_pattern (nx.Graph): The subgraph induced by a pattern.
+            metric (str): The scoring metric to use ('mean' or 'var').
+            max_pattern_edges (float, optional): Maximum number of edges for normalization.
+                Defaults to the current subgraph size.
 
-            Returns:
-                float: The computed score (density or variance-based).
+        Returns:
+            float: The computed quality score (e.g., mean weight density or normalized variance).
         """
         if max_pattern_edges is None:
             max_pattern_edges = graph_of_pattern.size()
 
         if max_pattern_edges == 0:
-            quality = 0
+            return 0.0
+
+        total_weight = graph_of_pattern.size(weight="weight")
+        mean_weight = total_weight / max_pattern_edges
+
+        if metric == 'mean':
+            return mean_weight
+
+        elif metric == 'var':
+            weights = [d.get('weight', 0.0) for _, _, d in graph_of_pattern.edges(data=True)]
+            variance = np.var(weights) / max_pattern_edges
+            return variance
+
         else:
-            mean = graph_of_pattern.size(weight="weight") / max_pattern_edges
-            if metric == 'mean':
-
-                quality = mean
-            elif metric == 'var':
-
-                weights = [e[2]['weight'] for e in graph_of_pattern.edges(data=True)]
-                var = sum((np.array(weights) - mean) ** 2) / max_pattern_edges
-                quality = var
-        return quality
+            raise ValueError(f"Unsupported metric: {metric}")
 
     def get_pattern_graph(self, pattern):
         """
@@ -366,78 +452,16 @@ class GraphSDMiningBase(object):
 
         return dataframe
 
+
 class DigraphSDMining(GraphSDMiningBase):
     """
     Subclass for directed graphs. Implements methods specific to directed edge interaction modeling.
     """
-    def __init__(self,
-                 n_bins=3,
-                 n_samples=100,
-                 metric='mean',
-                 mode="comparison",
-                 random_state=None,
-                 n_jobs=1
-                 ):
-        super().__init__(
-            n_bins=n_bins,
-            n_samples=n_samples,
-            metric=metric,
-            mode=mode,
-            random_state=random_state,
-            n_jobs=n_jobs
-        )
 
-        self.n_bins = n_bins
-        self.n_samples = n_samples
-        self.metric = metric
-        self.mode = mode
-        self.random_state = random_state
-        self.n_jobs = n_jobs
-
-        self.graph = None
-        self.social_data = None
-
-        self.graph_type = "digraph"
-
-    def read_data(self, position_data, social_data, time_step=10):
-        """
-        Constructs a directed graph from position data and social attributes.
-
-        Parameters:
-            position_data (pd.DataFrame): Positional tracking data (must include 'id', 'x', 'y', and 'timestamp').
-            social_data (pd.DataFrame): Node-level attribute data (must include 'id').
-            time_step (int): Temporal granularity for edge construction.
-
-        Returns:
-            Counter: Edge occurrence counts between individuals.
-        """
-        position_data = compute_velocities(position_data)
-
-        counter = count_interactions_digraph(position_data, proximity=1, time_step=time_step)
-        ids = position_data.id.unique()
-
-        self._create_graph(counter, ids)
-        self.social_data = social_data
-
-        return counter
-
-    def _create_graph(self, counter, ids):
-        """
-        Initializes the directed graph with nodes and weighted edges.
-
-        Parameters:
-            counter (Counter): Edge weights from interaction events.
-            ids (list): Node identifiers.
-
-        Returns:
-            None
-        """
-        graph = DiGraph()
-        graph.add_nodes_from(ids)
-        graph.add_weighted_edges_from(getWEdges(counter))
-
-        self.graph = graph
-        self.graph.max_edges = self.graph.number_of_nodes() * (self.graph.number_of_nodes() - 1)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.graph_type = nx.DiGraph
+        self.multi = False
 
     def _get_transactions(self, mode):
         """
@@ -505,79 +529,16 @@ class DigraphSDMining(GraphSDMiningBase):
 
         return transactions
 
+
 class MultiDigraphSDMining(GraphSDMiningBase):
     """
         Subclass for multi-directed graphs (parallel edges allowed).
     """
-    def __init__(self,
-                 n_bins=3,
-                 n_samples=100,
-                 metric='mean',
-                 mode="comparison",
-                 random_state=None,
-                 n_jobs=1
-                 ):
-        super().__init__(
-            n_bins=n_bins,
-            n_samples=n_samples,
-            metric=metric,
-            mode=mode,
-            random_state=random_state,
-            n_jobs=n_jobs
-        )
-        self.n_bins = n_bins
-        self.n_samples = n_samples
-        self.metric = metric
-        self.mode = mode
-        self.random_state = random_state
-        self.n_jobs = n_jobs
 
-        self.graph = None
-        self.social_data = None
-
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.graph_type = nx.MultiDiGraph
         self.multi = True
-
-    def read_data(self, position_data, social_data, time_step=10):
-        """
-        Constructs a MultiDiGraph from spatial-temporal interactions and social metadata.
-
-        Parameters:
-            position_data (pd.DataFrame): Position tracking data with 'id', 'x', 'y', 'timestamp'.
-            social_data (pd.DataFrame): Node-level attributes.
-            time_step (int): Temporal granularity for graph edges.
-
-        Returns:
-            Counter: Edge interaction counts.
-        """
-        position_data = compute_velocities(position_data)
-
-        counter = count_interactions_multi_digraph(position_data, proximity=1, time_step=time_step)
-        ids = position_data.id.unique()
-
-        self._create_graph(counter, ids)
-        self.social_data = social_data
-
-        return counter
-
-    def _create_graph(self, counter, ids):
-        """
-        Creates a MultiDiGraph from a weighted edge counter.
-
-        Parameters:
-            counter (Counter): Edge weights between node pairs.
-            ids (List[int]): List of node identifiers.
-
-        Returns:
-            None
-        """
-        graph = MultiDiGraph()
-        graph.add_nodes_from(ids)
-        graph.add_weighted_edges_from(counter)
-
-        self.graph = graph
-        self.graph.max_edges = self.graph.number_of_nodes() * (self.graph.number_of_nodes() - 1)
-        # TODO: Estimating the max edges of a multi graph is not 100% correct
-        self.graph.max_edges += self.count_edges(self.graph)
 
     def _get_transactions(self, mode):
         """
@@ -644,73 +605,16 @@ class MultiDigraphSDMining(GraphSDMiningBase):
         # nx.set_edge_attributes(G, attr)
         return transactions
 
+
 class GraphSDMining(GraphSDMiningBase):
     """
     Subclass for undirected graphs. Implements edge construction and attribute mapping for symmetric interactions.
     """
-    def __init__(self,
-                 n_bins=3,
-                 n_samples=100,
-                 metric='mean',
-                 random_state=None,
-                 n_jobs=1
-                 ):
-        super().__init__(
-            n_bins=n_bins,
-            n_samples=n_samples,
-            metric=metric,
-            random_state=random_state,
-            n_jobs=n_jobs
-        )
 
-        self.n_bins = n_bins
-        self.n_samples = n_samples
-        self.metric = metric
-        self.random_state = random_state
-        self.n_jobs = n_jobs
-
-        self.graph = None
-        self.social_data = None
-
-        self.graph_type = "digraph"
-
-    def read_data(self, position_data, social_data, time_step=10):
-        """
-        Constructs an undirected interaction graph based on co-location in space and time.
-
-        Parameters:
-            position_data (pd.DataFrame): Position data including columns 'id', 'x', 'y', 'timestamp'.
-            social_data (pd.DataFrame): Node-level attribute data.
-            time_step (int): Temporal bin size for detecting interactions.
-
-        Returns:
-            Counter: Edge weights representing frequency of interaction.
-        """
-        counter = count_interactions(position_data, proximity=1, time_step=time_step)
-        ids = position_data.id.unique()
-
-        self._create_graph(counter, ids)
-        self.social_data = social_data
-
-        return counter
-
-    def _create_graph(self, counter, ids):
-        """
-        Initializes the undirected graph using provided edges and node list.
-
-        Parameters:
-            counter (Counter): Edge weights.
-            ids (list): Node identifiers.
-
-        Returns:
-            None
-        """
-        graph = Graph()
-        graph.add_nodes_from(ids)
-        graph.add_weighted_edges_from(counter)
-
-        self.graph = graph
-        self.graph.max_edges = (self.graph.number_of_nodes() * (self.graph.number_of_nodes() - 1)) / 2
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.graph_type = nx.Graph
+        self.multi = False
 
     def _get_transactions(self, mode=None):
         """

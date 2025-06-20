@@ -6,7 +6,7 @@ This module exposes the main components of the library via the top-level package
 # from .outlier import *
 from importlib.metadata import version
 
-from .graph import *
+from .patterns import *
 from .mining import *
 from .utils import *
 

@@ -1,72 +1,9 @@
+import math
+from typing import List, Tuple, Dict, Any
+
+import numpy as np
 import pandas as pd
-from dataclasses import dataclass
-
-@dataclass(frozen=True, order=True)
-class NominalSelector:
-    """
-    Represents a nominal selector used in pattern descriptions for subgroup discovery.
-
-    Attributes:
-        attribute (str): Attribute name.
-        value (Any): Attribute value.
-    """
-    attribute: str
-    value: any
-
-    def __str__(self):
-        return f"({self.attribute}, {self.value})"
-
-
-class Pattern:
-    """
-    Represents a discovered pattern in a graph.
-
-    Attributes:
-        name (List[NominalSelector])
-        graph (nx.Graph)
-        weight (float)
-        quality (float)
-    """
-    def __init__(self, name: list, graph, weight: float):
-        self.name = name
-        self.graph = graph
-        self.weight = weight
-        self.quality = 0.0
-
-    def __repr__(self):
-        return str(self.name)
-
-    def __eq__(self, other):
-        return isinstance(other, Pattern) and set(self.name) == set(other.name)
-
-    def __lt__(self, other):
-        return self.quality < other.quality
-
-
-class PatternWithoutGraph:
-    """
-    Pattern representation for cases where a graph is not required.
-
-    Attributes:
-        name (List[NominalSelector])
-        ids (Set[Any])
-        weight (float)
-        quality (float)
-    """
-    def __init__(self, name: list, ids: set, weight: float):
-        self.name = name
-        self.ids = ids
-        self.weight = weight
-        self.quality = 0.0
-
-    def __repr__(self):
-        return str(self.name)
-
-    def __eq__(self, other):
-        return isinstance(other, PatternWithoutGraph) and set(self.name) == set(other.name)
-
-    def __lt__(self, other):
-        return self.quality < other.quality
+from scipy.spatial import distance
 
 
 def bin_column(series: pd.Series, n_bins=3, strategy: str = "uniform") -> pd.Series:
@@ -151,37 +88,90 @@ def compute_velocities(dataframe: pd.DataFrame) -> pd.DataFrame:
 
     return dataframe
 
-# def freqItemsets(transactions, prun=20):
-#     intTransactionsDict = {}
-#     last = 1
-#     intT = []
-#
-#     for trans in transactions:
-#         temp = []
-#         for att in trans:
-#             if att not in intTransactionsDict:
-#                 intTransactionsDict[att] = last
-#                 last += 1
-#             temp += [intTransactionsDict[att]]
-#         intT += [temp]
-#
-#     inv_intTransactionsDict = {v: k for k, v in intTransactionsDict.items()}
-#
-#     itemsets = list(frequent_itemsets(intT, prun))
-#
-#     newTransactions = {}
-#     for fset, count in itemsets:
-#         first = True
-#         for n in fset:
-#             if first:
-#                 temp = (inv_intTransactionsDict[n],)
-#                 first = False
-#             else:
-#                 temp += (inv_intTransactionsDict[n],)
-#
-#         newTransactions[temp] = count
-#
-#     return newTransactions
 
+def count_interactions(
+        dataframe: pd.DataFrame,
+        proximity: float = 1.0,
+        time_step: int = 10,
+        directed: bool = False,
+        include_all_pairs: bool = False
+) -> List[Tuple[int, int, Dict[str, Any]]]:
+    """
+    Computes pairwise interactions based on spatial proximity and optional directionality
+    inferred from velocity alignment.
 
-# Only works for bi directional graphs
+    Parameters:
+        dataframe (pd.DataFrame): Must contain 'id', 'x', 'y', 'time', and optionally 'velX', 'velY'.
+        proximity (float): Maximum distance to consider an interaction.
+        time_step (int): Size of the time window (in time units).
+        directed (bool): If True, treat interactions as directional based on cosine similarity.
+        include_all_pairs (bool): Include all node pairs in the result, even with zero interactions.
+
+    Returns:
+        List[Tuple[int, int, Dict[str, Any]]]: List of edges with 'weight' attribute, suitable for NetworkX.
+    """
+    ids = dataframe['id'].unique()
+    counter: Dict[Tuple[int, int], int] = {}
+
+    if include_all_pairs:
+        for id1 in ids:
+            for id2 in ids:
+                if id1 != id2:
+                    counter[(id1, id2)] = 0
+
+    start = dataframe['time'].min()
+    end = start + time_step
+    max_time = dataframe['time'].max()
+
+    while start <= max_time:
+        window = dataframe.query("@start <= time <= @end").groupby('id').mean()
+        if window.empty:
+            start = end
+            end += time_step
+            continue
+
+        coords = window[['x', 'y']].to_numpy()
+        dists = distance.cdist(coords, coords, 'euclidean')
+        np.fill_diagonal(dists, np.inf)
+
+        xs, ys = np.where(dists <= proximity)
+        seen_pairs = set()
+
+        for i in range(len(xs)):
+            id_x = window.index[xs[i]]
+            id_y = window.index[ys[i]]
+
+            if id_x == id_y:
+                continue
+
+            if not directed:
+                key = tuple(sorted((id_x, id_y)))
+                if key in seen_pairs:
+                    continue
+                seen_pairs.add(key)
+            else:
+                key = (id_x, id_y)
+                if key in seen_pairs:
+                    continue
+                seen_pairs.add(key)
+
+                try:
+                    vel_x, vel_y = window.loc[id_x, ['velX', 'velY']]
+                    dx = window.loc[id_y, 'x'] - window.loc[id_x, 'x']
+                    dy = window.loc[id_y, 'y'] - window.loc[id_x, 'y']
+
+                    dot = vel_x * dx + vel_y * dy
+                    norm_product = math.sqrt(vel_x ** 2 + vel_y ** 2) * math.sqrt(dx ** 2 + dy ** 2)
+                    cosine = dot / norm_product if norm_product else 0.0
+
+                    if cosine < 0:
+                        continue
+                except KeyError:
+                    continue
+
+            counter[key] = counter.get(key, 0) + 1
+
+        start = end
+        end += time_step
+
+    return [(a, b, {'weight': c}) for (a, b), c in counter.items()]

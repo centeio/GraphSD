@@ -1,4 +1,4 @@
-from graphsd.graph import *
+from graphsd.patterns import *
 from graphsd.utils import *
 
 np.random.seed(1234)
