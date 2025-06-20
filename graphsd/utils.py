@@ -73,7 +73,6 @@ class NoGPattern:
     """
         Pattern representation for cases where a graph is not required.
 
-        Attributes:
             name (List[NominalSelector]): List of conditions.
             ids (Set[Any]): Set of entity IDs matching the pattern.
             weight (float): Mean weight.
