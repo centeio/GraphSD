@@ -6,4 +6,4 @@ Provides access to built-in anonymized playground datasets for development and t
 from ._base import *
 
 
-__all__ = ['load_playground_a', 'load_playground_b']
+__all__ = ['load_data']

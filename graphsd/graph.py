@@ -1,15 +1,12 @@
-import networkx as nx
 import numpy as np
 from scipy.spatial import distance
+import networkx as nx
+import math
 
 from graphsd.utils import *
 
 
-def count_interactions(
-        dataframe: pd.DataFrame,
-        proximity: float = 1,
-        time_step: int = 10
-) -> list[tuple[int, int, int]]:
+def count_interactions(dataframe, proximity=1, time_step=10):
     """
     Computes pairwise interactions for undirected graphs based on spatial proximity
     over defined time windows.
@@ -49,11 +46,7 @@ def count_interactions(
     return [(list(key)[0], list(key)[1], value) for key, value in counter.items()]
 
 
-def count_interactions_digraph(
-        dataframe: pd.DataFrame,
-        proximity: float = 1,
-        time_step: int = 10
-) -> dict[tuple[int, int], int]:
+def count_interactions_digraph(dataframe, proximity=1, time_step=10):
     """
     Computes pairwise interactions for directed graphs based on spatial proximity
     over defined time windows.
@@ -104,11 +97,8 @@ def count_interactions_digraph(
 
     return {key: value for key, value in counter.items()}
 
-def count_interactions_digraph_all(
-        dataframe: pd.DataFrame,
-        proximity: float = 1,
-        time_step: int = 10
-) -> dict[tuple[int, int], int]:
+
+def count_interactions_digraph_all(dataframe, proximity=1, time_step=10):
     """
     Computes directed interactions across all node pairs in a time window, filtering based on velocity alignment.
 
@@ -163,11 +153,7 @@ def count_interactions_digraph_all(
     return {key: value for key, value in counter.items()}
 
 
-def count_interactions_multi_digraph(
-        dataframe: pd.DataFrame,
-        proximity: float,
-        time_step: int = 10
-) -> list[tuple[int, int, float]]:
+def count_interactions_multi_digraph(dataframe, proximity, time_step=10):
     """
     Computes pairwise interactions for multi-directed graphs, tracking repeated edges
     between the same node pairs across time windows.
@@ -232,11 +218,7 @@ def count_interactions_multi_digraph(
     return [(x, y, w) for x, y, w in counter]
 
 
-def count_interactions_multi_digraph2(
-        dataframe: pd.DataFrame,
-        proximity: float,
-        time_step: int = 10
-) -> list[tuple[int, int, float]]:
+def count_interactions_multi_digraph2(dataframe, proximity, time_step=10):
     """
     Computes multi-directed interactions by tracking directional edges and resetting counts
     when the following condition is broken.
@@ -299,11 +281,7 @@ def count_interactions_multi_digraph2(
     return [(x, y, w) for x, y, w in counter]
 
 
-def getMultiDInteractions_all(
-        dataframe: pd.DataFrame,
-        proximity: float,
-        time_step: int = 10
-) -> list[tuple[int, int, float]]:
+def getMultiDInteractions_all(dataframe, proximity, time_step=10):
     """
     Computes multi-directed interactions including non-interacting node pairs (filled with weight zero).
 
@@ -376,12 +354,7 @@ def getMultiDInteractions_all(
     return [(x, y, w) for x, y, w in counter]
 
 
-def getDInteractions_between(
-        dataframe: dict[str, pd.DataFrame],
-        start_time: str,
-        end_time: str,
-        proximity: float
-) -> dict[tuple[int, int], int]:
+def getDInteractions_between(dataframe, start_time, end_time, proximity):
     """
     Computes directed interactions over a time range based on velocity direction and proximity.
 
@@ -449,14 +422,7 @@ def getDInteractions_between(
     return {key: value for key, value in counter.items()}
 
 
-def getMultiDInteractions_between(
-        dataframe: dict[str,
-        pd.DataFrame],
-        start_time: str,
-        end_time: str,
-        proximity: float,
-        nseconds: int = 1
-) -> list[tuple[int, int, float]]:
+def getMultiDInteractions_between(dataframe, start_time, end_time, proximity, nseconds=1):
     """
     Tracks directed multi-edges between individuals over time, recording durations of uninterrupted following.
 
@@ -527,7 +493,7 @@ def getMultiDInteractions_between(
     return [(x, y, w) for x, y, w in counter]
 
 
-def getWEdges(counter: dict[tuple[int, int], int]) -> list[tuple[int, int, int]]:
+def getWEdges(counter):
     """
     Converts a dictionary of edge weights into a list of weighted edge tuples.
 
@@ -545,8 +511,7 @@ def getWEdges(counter: dict[tuple[int, int], int]) -> list[tuple[int, int, int]]
 
     return gedges
 
-
-def edgesInPDescription(G: nx.Graph, P: list[NominalSelector]) -> tuple[list[tuple], set[int]]:
+def edgesInPDescription(G, P):
     """
     Filters edges in a graph based on whether they match all conditions in a pattern description.
 
@@ -573,7 +538,7 @@ def edgesInPDescription(G: nx.Graph, P: list[NominalSelector]) -> tuple[list[tup
     return edges, nodes
 
 
-def edgesInP(G: nx.Graph, P: list[NominalSelector]) -> Pattern:
+def edgesInP(G, P):
     """
     Extracts the subgraph induced by a pattern and computes its average edge weight.
 
@@ -617,7 +582,7 @@ def edgesInP(G: nx.Graph, P: list[NominalSelector]) -> Pattern:
     return pat
 
 
-def infoPats_nodes(listOfPatterns: list[Pattern], dataset: pd.DataFrame) -> pd.DataFrame:
+def infoPats_nodes(listOfPatterns, dataset):
     """
     Summarizes a list of patterns with coverage statistics in node-based (NoGPattern) scenarios.
 
