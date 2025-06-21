@@ -1,4 +1,4 @@
-from typing import List, Dict, Tuple, Any, Optional
+from typing import List, Dict, Tuple, Union, Optional, Any
 
 import networkx as nx
 import numpy as np
@@ -6,7 +6,6 @@ import pandas as pd
 from joblib import Parallel, delayed
 from mlxtend.frequent_patterns import fpgrowth
 from mlxtend.preprocessing import TransactionEncoder
-from networkx import Graph, DiGraph, MultiGraph, MultiDiGraph
 
 from graphsd.patterns import Pattern, NominalSelector
 from graphsd.utils import compute_velocities, count_interactions
@@ -48,7 +47,15 @@ class GraphSDMiningBase(object):
         self.social_data = None
 
         self.graph_type = None
-        self.multi = False
+        self.directed: bool = False
+        self.multi: bool = False
+
+    QUALITY_MEASURES = {
+        "qS": "relative_density",
+        "qP": "global_proportion",
+        "relative_density": "relative_density",
+        "global_proportion": "global_proportion"
+    }
 
     @staticmethod
     def get_frequent_items(
@@ -90,7 +97,9 @@ class GraphSDMiningBase(object):
 
     def _create_graph(self, edge_list: List[Tuple[int, int, Dict[str, Any]]]) -> None:
         """
-        Builds a NetworkX graph using the declared graph type and edge list.
+        Builds a NetworkX graph using the declared graph type and provided edge list.
+
+        Also computes the theoretical and observed number of edges for later use in quality scoring.
 
         Parameters:
             edge_list (List[Tuple[int, int, Dict[str, Any]]]): Edge data with 'weight' or other attributes.
@@ -103,13 +112,15 @@ class GraphSDMiningBase(object):
         self.graph = G
 
         n = G.number_of_nodes()
-        if isinstance(G, nx.DiGraph) or isinstance(G, nx.MultiDiGraph):
-            self.graph.max_edges = n * (n - 1)
-        else:
-            self.graph.max_edges = n * (n - 1) // 2
 
-        if self.multi:
-            self.graph.max_edges += self.count_edges(G)
+        # Theoretical maximum number of edges (no self-loops)
+        if isinstance(G, (nx.DiGraph, nx.MultiDiGraph)):
+            G.theoretical_edges = float(n * (n - 1))  # directed
+        else:
+            G.theoretical_edges = float(n * (n - 1) // 2)  # undirected
+
+        # Actual observed number of edges (multi-edge-aware)
+        G.observed_edges = float(G.number_of_edges())
 
     def read_data(
             self,
@@ -157,7 +168,7 @@ class GraphSDMiningBase(object):
             mode: str = "comparison",
             min_support: float = 0.1,
             metric: str = "mean",
-            quality_measure: str = "qS"
+            quality_measure: str = "relative_density"
     ) -> List[Pattern]:
         """
         Discovers high-quality subgroups based on frequent patterns and interaction quality.
@@ -166,14 +177,15 @@ class GraphSDMiningBase(object):
             mode (str): Strategy for extracting attribute transactions ('comparison', 'composition', etc.)
             min_support (float): Minimum frequency threshold (0 < s ≤ 1).
             metric (str): Target metric to evaluate subgraphs ('mean', 'var', etc.)
-            quality_measure (str): Quality function to use ('qS', 'qP', etc.)
+            quality_measure (str): Quality function to use ('relative_density', 'global_proportion', etc.)
 
         Returns:
             List[Pattern]: Sorted list of patterns ranked by quality.
         """
-        np.random.seed(self.random_state)
+        self.npr.seed(self.random_state)
 
-        transactions = self._get_transactions(mode)
+        self.annotate_edges(mode=mode)
+        transactions = self.extract_transactions()
         itemsets = self.get_frequent_items(transactions, min_support)
 
         if not itemsets:
@@ -188,8 +200,6 @@ class GraphSDMiningBase(object):
             results = [self.quality_measure_base(itemset, metric, quality_measure) for itemset in itemsets]
 
         return sorted(results, key=lambda p: p.quality, reverse=True)
-
-    from typing import List, Tuple, Any
 
     def extract_edge_keys(
             self,
@@ -220,32 +230,39 @@ class GraphSDMiningBase(object):
             self,
             pattern: Tuple[NominalSelector, ...],
             metric: str,
-            measure_type: str = "qS"
+            measure_type: str = "relative_density"
     ) -> Pattern:
         """
         Computes the normalized quality score of a pattern's induced subgraph.
 
         Parameters:
-            pattern (Tuple[str]): The selectors defining the subgroup pattern.
-            metric (str): Evaluation metric to apply to the subgraph ('mean', 'var', etc.).
-            measure_type (str): Quality scoring strategy ('qS' = structural, 'qP' = proportional).
+            pattern (Tuple[NominalSelector, ...]): Attribute-value selectors defining the pattern.
+            metric (str): Evaluation metric ('mean', 'var', etc.).
+            measure_type (str): Quality scoring strategy.
+                Supported:
+                    - 'relative_density' (qS): based on structural potential of the pattern subgraph
+                    - 'global_proportion' (qP): based on total graph edge mass
 
         Returns:
-            Pattern: A Pattern object containing the induced subgraph and its quality score.
+            Pattern: A Pattern object with the subgraph and its computed quality score.
         """
         raw_edges = self.get_edges_in_pattern(pattern)
         edges = self.extract_edge_keys(raw_edges)
         graph_of_pattern = self.graph.edge_subgraph(edges).copy()
 
-        if measure_type == 'qS':
-            n_nodes = len(graph_of_pattern)
+        # Normalize shorthand identifiers
+        measure_type = self.QUALITY_MEASURES.get(measure_type, None)
+        if measure_type is None:
+            raise ValueError(
+                "Unsupported quality measure. Use one of: "
+                f"{list(self.QUALITY_MEASURES.keys())}"
+            )
+
+        if measure_type == 'relative_density':
+            n_nodes = graph_of_pattern.number_of_nodes()
             max_pattern_edges = float(n_nodes * (n_nodes - 1))
-            if self.multi:
-                max_pattern_edges += self.count_edges(graph_of_pattern)
-        elif measure_type == 'qP':
+        elif measure_type == 'global_proportion':
             max_pattern_edges = None
-        else:
-            raise ValueError(f"Unsupported quality measure: {measure_type}")
 
         score = self.measure_score(graph_of_pattern, metric, max_pattern_edges)
         subgroup = Pattern(pattern, graph_of_pattern, score)
@@ -257,7 +274,7 @@ class GraphSDMiningBase(object):
             max_pattern_edges=max_pattern_edges
         )
 
-        subgroup.quality = (subgroup.weight - mean) / std
+        subgroup.quality = (subgroup.weight - mean) / std if std > 0 else 0.0
 
         return subgroup
 
@@ -340,74 +357,108 @@ class GraphSDMiningBase(object):
         else:
             raise ValueError(f"Unsupported metric: {metric}")
 
-    def get_pattern_graph(self, pattern):
+    def get_edges_in_pattern(
+            self,
+            pattern: Tuple[NominalSelector, ...]
+    ) -> List[Union[
+        Tuple[int, int, dict],  # For Graph / DiGraph
+        Tuple[int, int, int, dict]  # For MultiGraph / MultiDiGraph
+    ]]:
         """
-            Builds a subgraph containing only edges that match the attribute-value selectors.
+        Extracts edges from the main graph that satisfy all attribute-value selectors in the pattern.
 
-            Parameters:
-                pattern (Tuple[str]): A tuple of attribute-value selectors.
+        Parameters:
+            pattern (Tuple[NominalSelector, ...]): Selectors defining the edge pattern to match.
 
-            Returns:
-                nx.Graph: Subgraph of the main graph that satisfies the pattern.
+        Returns:
+            List[Tuple]: A list of edges (u, v, data) or (u, v, key, data), depending on graph type.
         """
-        if type(self.graph) == Graph:
-            graph_of_pattern = Graph()
-        elif type(self.graph) == DiGraph:
-            graph_of_pattern = DiGraph()
-        elif type(self.graph) == MultiGraph:
-            graph_of_pattern = MultiGraph()
-        elif type(self.graph) == MultiDiGraph:
-            graph_of_pattern = MultiDiGraph()
+        if self.multi:
+            edge_iter = self.graph.edges(keys=True, data=True)
         else:
-            msg = f"Unknown graph type"
-            ValueError(msg)
+            edge_iter = self.graph.edges(data=True)
 
-        edges_list = self.get_edges_in_pattern(pattern)
-        graph_of_pattern.add_edges_from(edges_list)
+        matching_edges = []
 
-        return graph_of_pattern
+        for edge in edge_iter:
+            data = edge[-1]  # data dict is always the last element
+            if all(data.get(sel.attribute) == sel.value for sel in pattern):
+                matching_edges.append(edge)
 
-    def get_edges_in_pattern(self, pattern) -> list:
+        return matching_edges
+
+    def extract_transactions(self) -> List[List[NominalSelector]]:
         """
-        Extracts edges from the main graph that satisfy all conditions in the pattern.
-
-        Parameters:
-            pattern (Tuple[NominalSelector]): Selectors defining the pattern.
+        Extracts transactions (attribute-value itemsets) from annotated edges in the graph.
 
         Returns:
-            list: List of edge tuples that match the pattern.
+            List[List[NominalSelector]]: One transaction per edge, based on its annotated attributes.
         """
-        edges = []
+        attributes = self.social_data.drop(columns=["id"]).columns
+        transactions = []
 
-        for edge in list(self.graph.edges(data=True)):
-            edge_in_pattern = True
-            for sel in pattern:
-                if edge[2][sel.attribute] != sel.value:
-                    edge_in_pattern = False
-                    break
+        edges = (
+            self.graph.edges(keys=True, data=True)
+            if self.multi else self.graph.edges(data=True)
+        )
 
-            if edge_in_pattern:
-                edges.append(edge)
+        for edge in edges:
+            edict = edge[-1]
+            tr = [NominalSelector(att, edict[att]) for att in attributes]
+            transactions.append(tr)
 
-        return edges
+        return transactions
 
-    @staticmethod
-    def count_edges(graph):
+    def annotate_edges(self, mode: str = "comparison") -> None:
         """
-        Counts the number of multi-edges beyond the basic single-edge count.
+        Annotates each edge in the graph with attributes derived from node-level social data.
 
         Parameters:
-            graph (nx.MultiGraph or MultiDiGraph): Graph to evaluate.
+            mode (str): Strategy for encoding node attributes on edges.
+                - "to": takes attributes from the target node (only for directed graphs)
+                - "from": takes attributes from the source node (only for directed graphs)
+                - "comparison": encodes the relationship between source and target attributes
 
-        Returns:
-            int: Count of excess edges beyond one per node pair.
+        Raises:
+            ValueError: If mode is invalid for the graph type.
         """
-        count = 0
-        for node1 in graph.nodes:
-            for node2 in graph.nodes:
-                if node1 != node2:
-                    count += (graph.number_of_edges(node1, node2) - 1)
-        return count
+        if not self.directed and mode in {"to", "from"}:
+            # No direction in undirected graphs — fall back to symmetric comparison
+            print(f"[INFO] Mode '{mode}' is not applicable to undirected graphs — falling back to 'comparison'.")
+            mode = "comparison"
+
+        attributes = self.social_data.drop(columns=["id"]).columns
+
+        edges = (
+            self.graph.edges(keys=True, data=True)
+            if self.multi else self.graph.edges(data=True)
+        )
+
+        for edge in edges:
+            u, v = edge[:2]
+            edict = edge[-1]
+
+            for att in attributes:
+                val_u = self.social_data[self.social_data.id == u][att].item()
+                val_v = self.social_data[self.social_data.id == v][att].item()
+
+                if mode == "to":
+                    val = val_v
+                elif mode == "from":
+                    val = val_u
+                elif mode == "comparison":
+                    if isinstance(val_u, str):
+                        val = str((val_u, val_v))
+                    elif val_u == val_v:
+                        val = "EQ"
+                    elif val_u > val_v:
+                        val = ">"
+                    else:
+                        val = "<"
+                else:
+                    raise ValueError("Invalid mode. Use one of: 'to', 'from', 'comparison'.")
+
+                edict[att] = val
 
     @staticmethod
     def to_dataframe(subgroups: List[Pattern]) -> pd.DataFrame:
@@ -461,73 +512,8 @@ class DigraphSDMining(GraphSDMiningBase):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.graph_type = nx.DiGraph
+        self.directed = True
         self.multi = False
-
-    def _get_transactions(self, mode):
-        """
-        Generates transactions by assigning edge attributes based on the selected mode.
-
-        Parameters:
-            mode (str): One of 'to', 'from', or 'comparison', indicating how to label edges.
-
-        Returns:
-            List[List[NominalSelector]]: Transactions for pattern mining.
-        """
-        transactions = self.set_attributes(mode=mode)
-        return transactions
-
-    def set_attributes(self, signed_graph=None, mode="comparison"):
-        """
-        Assigns edge attributes from node-level data depending on the mode of comparison.
-
-        Parameters:
-            signed_graph (nx.Graph, optional): If provided, ensures edge weights are 0 for missing edges.
-            mode (str): One of 'to', 'from', or 'comparison'.
-
-        Returns:
-            List[List[NominalSelector]]: List of edge transactions with attribute-value selectors.
-        """
-        attributes = self.social_data.drop(['id'], axis=1).columns
-
-        attr = {}
-        transactions = []
-
-        for edge1, edge2 in list(self.graph.edges()):
-            tr = []
-            edge_attr = {}
-            for att in attributes:
-                if mode == "to":
-                    edge_attr[att] = self.social_data[self.social_data.id == edge2][att].item()
-                elif mode == "from":
-                    edge_attr[att] = self.social_data[self.social_data.id == edge1][att].item()
-                elif mode == "comparison":
-                    if isinstance(self.social_data[self.social_data.id == edge1][att].item(), str):
-                        edge_attr[att] = str((self.social_data[self.social_data.id == edge1][att].item(),
-                                              self.social_data[self.social_data.id == edge2][att].item()))
-                    elif self.social_data[self.social_data.id == edge1][att].item() == \
-                            self.social_data[self.social_data.id == edge2][att].item():
-                        edge_attr[att] = "EQ"
-                    elif self.social_data[self.social_data.id == edge1][att].item() > \
-                            self.social_data[self.social_data.id == edge2][att].item():
-                        edge_attr[att] = ">"
-                    else:
-                        edge_attr[att] = "<"
-                else:
-                    msg = "Unknown mode. Current ones are: ['to','from','comparison']"
-                    ValueError(msg)
-
-                tr.append(NominalSelector(att, edge_attr[att]))
-
-            if signed_graph is not None:
-                if not signed_graph.has_edge(edge1, edge2):
-                    edge_attr['weight'] = 0
-
-            attr[(edge1, edge2)] = edge_attr
-            transactions.append(tr)
-
-        nx.set_edge_attributes(self.graph, attr)
-
-        return transactions
 
 
 class MultiDigraphSDMining(GraphSDMiningBase):
@@ -538,73 +524,8 @@ class MultiDigraphSDMining(GraphSDMiningBase):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.graph_type = nx.MultiDiGraph
+        self.directed = True
         self.multi = True
-
-    def _get_transactions(self, mode):
-        """
-        Extracts edge-level transactions for pattern mining using multi-directed graph structure.
-
-        Parameters:
-            mode (str): Attribute assignment mode ('to', 'from', or 'comparison').
-
-        Returns:
-            List[List[NominalSelector]]: List of transactions per edge.
-        """
-        transactions = self.set_attributes(mode=mode)
-        return transactions
-
-    def set_attributes(self, signed_graph=None, mode="comparison"):
-        """
-        Annotates each edge with attributes derived from node-level metadata, handling multiple edges.
-
-        Parameters:
-            signed_graph (nx.Graph, optional): Graph used to enforce zero-weight for missing edges.
-            mode (str): One of 'to', 'from', or 'comparison'.
-
-        Returns:
-            List[List[NominalSelector]]: Transaction list of attribute-value selectors per edge.
-        """
-        attributes = self.social_data.drop(['id'], axis=1).columns
-
-        transactions = []
-        i = 0
-        for nid1, nid2, ekey, edict in list(self.graph.edges(keys=True, data=True)):
-            tr = []
-            # edge_attr = {}
-            for att in attributes:
-                if mode == "to":
-                    edict[att] = self.social_data[self.social_data.id == nid2][att].item()
-                elif mode == "from":
-                    edict[att] = self.social_data[self.social_data.id == nid1][att].item()
-                elif mode == "comparison":
-                    if isinstance(self.social_data[self.social_data.id == nid1][att].item(), str):
-                        edict[att] = str(
-                            (self.social_data[self.social_data.id == nid1][att].item(),
-                             self.social_data[self.social_data.id == nid2][att].item()))
-                    elif self.social_data[self.social_data.id == nid1][att].item() == \
-                            self.social_data[self.social_data.id == nid2][att].item():
-                        # edge_attr[att] = "EQ"
-                        edict[att] = "EQ"
-                    elif self.social_data[self.social_data.id == nid1][att].item() > \
-                            self.social_data[self.social_data.id == nid2][att].item():
-                        # edge_attr[att] = ">"
-                        edict[att] = ">"
-                    else:
-                        # edge_attr[att] = "<"
-                        edict[att] = "<"
-                tr.append(NominalSelector(att, edict[att]))
-
-            # attr[e] = edge_attr
-            transactions.append(tr)
-            i += 1
-
-            if signed_graph is not None:
-                if not signed_graph.has_edge(nid1, nid2):
-                    edict['weight'] = 0
-
-        # nx.set_edge_attributes(G, attr)
-        return transactions
-
 
 class GraphSDMining(GraphSDMiningBase):
     """
@@ -614,53 +535,5 @@ class GraphSDMining(GraphSDMiningBase):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.graph_type = nx.Graph
+        self.directed = False
         self.multi = False
-
-    def _get_transactions(self, mode=None):
-        """
-        Generates transactions by comparing node attributes on undirected edges.
-
-        Parameters:
-            mode (str, optional): Unused for undirected graphs but kept for interface consistency.
-
-        Returns:
-            List[List[NominalSelector]]: List of transactions for each edge.
-        """
-        transactions = self.set_attributes()
-        return transactions
-
-    def set_attributes(self, signed_graph=None):
-        """
-        Assigns equality-based attributes to each edge in the undirected graph.
-
-        Parameters:
-            signed_graph (nx.Graph, optional): If provided, missing edges are given weight 0.
-
-        Returns:
-            List[List[NominalSelector]]: Attribute-value selectors per edge.
-        """
-        attributes = self.social_data.drop(['id'], axis=1).columns
-
-        attr = {}
-        transactions = []
-
-        for nid1, nid2 in list(self.graph.edges()):
-            tr = []
-            edge_attr = {}
-            for att in attributes:
-                if self.social_data[self.social_data.id == nid1][att].item() == \
-                        self.social_data[self.social_data.id == nid2][att].item():
-                    edge_attr[att] = "EQ"
-                else:
-                    edge_attr[att] = "NEQ"
-                tr.append(NominalSelector(att, edge_attr[att]))
-
-            if signed_graph is not None:
-                if not signed_graph.has_edge(nid1, nid2):
-                    edge_attr['weight'] = 0
-
-            attr[(nid1, nid2)] = edge_attr
-            transactions.append(tr)
-
-        nx.set_edge_attributes(self.graph, attr)
-        return transactions
