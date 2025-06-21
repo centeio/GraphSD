@@ -6,7 +6,7 @@ from shapely.geometry import MultiPoint, Point, Polygon
 from sklearn.neighbors import LocalOutlierFactor
 from typing import List, Optional
 from graphsd.utils import get_rng
-from graphsd.utils import NoGPattern, NominalSelector
+from graphsd import PatternWithoutGraph, NominalSelector
 
 
 class OutlierSDMining(object):
@@ -334,7 +334,7 @@ def idsInP(dataset, P, target):
         target (str): Column name for the target variable (e.g., 'lof' or 'area').
 
     Returns:
-        NoGPattern: A pattern object with matching IDs and computed weight.
+        PatternWithoutGraph: A pattern object with matching IDs and computed weight.
     """
     pids = []
     wsum = 0
@@ -367,7 +367,7 @@ def idsInP(dataset, P, target):
         w = wsum / nEp
 
     print(w)
-    pat = NoGPattern(P, pids, w)
+    pat = PatternWithoutGraph(P, pids, w)
 
     return pat
 
@@ -405,7 +405,7 @@ def qs_nodes_aux(dataframe, eids, target):
 #         target (str): Target variable for quality scoring.
 #
 #     Returns:
-#         NoGPattern: Pattern object with quality score set.
+#         PatternWithoutGraph: Pattern object with quality score set.
 #     """
 #     pat = idsInP(dataset, P, target)
 #
@@ -433,7 +433,7 @@ def qs_nodes(
     n_samples: int,
     target: str,
     random_state: Optional[int] = None
-) -> 'NoGPattern':
+) -> PatternWithoutGraph:
     """
     Evaluates pattern quality using Monte Carlo sampling over entities.
 
@@ -454,7 +454,7 @@ def qs_nodes(
 
     Returns
     -------
-    NoGPattern
+    PatternWithoutGraph
         Pattern object with updated quality score.
     """
     rng = get_rng(random_state)
@@ -485,7 +485,7 @@ def treeQuality_nodes(dataset, nodes, target):
         target (str): Name of the column to evaluate (e.g., 'lof', 'area').
 
     Returns:
-        List[NoGPattern]: List of patterns with computed quality scores.
+        List[PatternWithoutGraph]: List of patterns with computed quality scores.
     """
     dataset = dataset.reset_index(drop=True)
     qs = []

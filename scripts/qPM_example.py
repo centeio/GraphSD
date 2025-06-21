@@ -1,4 +1,4 @@
-from graphsd.graph import *
+from graphsd.patterns import *
 from scripts.process_data import load_data
 
 np.random.seed(1234)

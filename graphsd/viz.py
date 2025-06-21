@@ -1,64 +1,64 @@
 import matplotlib.pyplot as plt
 import networkx as nx
-from typing import Optional, Callable, Any
+from typing import Optional, Callable, Any, Tuple
+
 
 def graph_viz(
-        graph: nx.Graph,
-        layout: Optional[Callable[[nx.Graph], dict]] = None,
-        width: float = 2.0,
-        node_size: int = 300,
-        node_color: str = "skyblue",
-        edge_color_attr: Optional[str] = "weight",
-        edge_cmap: Any = plt.cm.Blues,
-        with_labels: bool = True,
-        figsize: tuple = (6, 6),
-        title: Optional[str] = None,
+    graph: nx.Graph,
+    layout: Optional[Callable[[nx.Graph], dict]] = nx.spring_layout,
+    width: float = 2.0,
+    node_size: int = 300,
+    node_color: str = "skyblue",
+    edge_color_attr: Optional[str] = "weight",
+    edge_cmap: Any = plt.cm.Blues,
+    with_labels: bool = True,
+    figsize: Tuple[int, int] = (6, 6),
+    title: Optional[str] = None,
+    ax: Optional[plt.Axes] = None
 ) -> None:
     """
-    Visualize a graph with customizable layout and styling options.
+    Visualize a NetworkX graph with customizable layout and styling options.
 
     Args:
         graph (nx.Graph): The graph to visualize.
-        layout (Callable, optional): A layout function from NetworkX (e.g., nx.spring_layout).
-                                     Defaults to circular layout if not provided.
-        width (float): Width of the edges.
-        node_size (int): Size of the nodes.
-        node_color (str): Color of the nodes.
-        edge_color_attr (str, optional): Edge attribute to use for coloring. If None, all edges are same color.
-        edge_cmap (Colormap): Colormap for edge coloring.
+        layout (Callable, optional): A layout function like nx.spring_layout. Defaults to nx.circular_layout.
+        width (float): Width of edges.
+        node_size (int): Size of nodes.
+        node_color (str): Color of nodes.
+        edge_color_attr (str, optional): Edge attribute to color edges by. If None, uses solid black.
+        edge_cmap (Any): Colormap for edge weights.
         with_labels (bool): Whether to show node labels.
-        figsize (tuple): Size of the plot figure.
-        title (str, optional): Optional plot title.
+        figsize (tuple): Figure size in inches.
+        title (str, optional): Title of the plot.
+        ax (matplotlib.axes.Axes, optional): Optional axis to draw on (useful for subplots).
 
     Returns:
         None
     """
-    # Determine node positions
     pos = layout(graph) if layout else nx.circular_layout(graph)
 
-    # Determine edge colors
+    edge_colors = "black"
     if edge_color_attr:
-        edge_attrs = nx.get_edge_attributes(graph, edge_color_attr)
-        edge_colors = list(edge_attrs.values())
-    else:
-        edge_colors = "gray"
+        edge_attr = nx.get_edge_attributes(graph, edge_color_attr)
+        edge_colors = [edge_attr.get(edge, 0.0) for edge in graph.edges]
 
-    # Plotting
-    plt.figure(figsize=figsize)
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize)
+
     nx.draw(
         graph,
         pos,
+        ax=ax,
         node_size=node_size,
         node_color=node_color,
         edge_color=edge_colors,
         width=width,
-        edge_cmap=edge_cmap,
         with_labels=with_labels,
+        edge_cmap=edge_cmap,
     )
 
     if title:
-        plt.title(title)
+        ax.set_title(title)
 
-    plt.axis("off")
+    ax.set_axis_off()
     plt.tight_layout()
-    plt.show()
