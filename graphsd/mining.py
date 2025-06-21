@@ -10,6 +10,9 @@ from mlxtend.preprocessing import TransactionEncoder
 from graphsd.patterns import Pattern, NominalSelector
 from graphsd.utils import compute_velocities, count_interactions
 
+import logging
+
+logger = logging.getLogger(__name__)
 
 class GraphSDMiningBase(object):
     """
@@ -35,6 +38,7 @@ class GraphSDMiningBase(object):
                  random_state=None,
                  n_jobs=1
                  ):
+        self._edge_attributes = None
         self.n_bins = n_bins
         self.n_samples = n_samples
         self.metric = metric
@@ -95,32 +99,37 @@ class GraphSDMiningBase(object):
         """
         pass
 
-    def _create_graph(self, edge_list: List[Tuple[int, int, Dict[str, Any]]]) -> None:
+    def _max_possible_edges(self, num_nodes: int) -> float:
         """
-        Builds a NetworkX graph using the declared graph type and provided edge list.
+        Compute the maximum number of edges possible for the graph type.
 
-        Also computes the theoretical and observed number of edges for later use in quality scoring.
-
-        Parameters:
-            edge_list (List[Tuple[int, int, Dict[str, Any]]]): Edge data with 'weight' or other attributes.
+        Args:
+            num_nodes (int): Number of nodes.
 
         Returns:
-            None
+            float: Theoretical upper bound of edges.
+        """
+        max_edges = float(num_nodes * (num_nodes - 1)) if self.directed else float(num_nodes * (num_nodes - 1) // 2)
+        logger.debug(f"Computed max possible edges for n={num_nodes}: {max_edges}")
+        return max_edges
+
+    def _create_graph(self, edge_list: List[Tuple]) -> None:
+        """
+        Initialize a NetworkX graph from a list of edges with attributes.
+
+        Sets:
+            self.graph, self.theoretical_edges, self.observed_edges
         """
         G = self.graph_type()
         G.add_edges_from(edge_list)
         self.graph = G
 
         n = G.number_of_nodes()
+        self.theoretical_edges = self._max_possible_edges(n)
+        self.observed_edges = float(G.number_of_edges())
 
-        # Theoretical maximum number of edges (no self-loops)
-        if isinstance(G, (nx.DiGraph, nx.MultiDiGraph)):
-            G.theoretical_edges = float(n * (n - 1))  # directed
-        else:
-            G.theoretical_edges = float(n * (n - 1) // 2)  # undirected
-
-        # Actual observed number of edges (multi-edge-aware)
-        G.observed_edges = float(G.number_of_edges())
+        logger.info(f"Created graph with {n} nodes and {self.observed_edges:.0f} edges.")
+        logger.debug(f"Theoretical edges: {self.theoretical_edges:.0f}, Observed edges: {self.observed_edges:.0f}")
 
     def read_data(
             self,
@@ -132,21 +141,32 @@ class GraphSDMiningBase(object):
         """
         Processes positional data into a proximity-based interaction graph.
 
-        Parameters:
-            position_data (pd.DataFrame): Includes 'id', 'x', 'y', 'time'. Velocities will be computed if needed.
-            social_data (Any): Optional metadata.
+        Args:
+            position_data (pd.DataFrame): Must include 'id', 'x', 'y', 'time'. Velocities are computed if needed.
+            social_data (pd.DataFrame): Node-level or edge-level metadata. Should align with graph structure.
             time_step (int): Time window size for interaction aggregation.
-            proximity (float): Max spatial distance for interactions.
+            proximity (float): Max spatial distance to consider two entities as interacting.
 
         Returns:
             None
         """
+        logger.info("Reading input data and constructing interaction graph...")
+
+        if not isinstance(position_data, pd.DataFrame):
+            raise ValueError("position_data must be a pandas DataFrame.")
+        if not isinstance(social_data, pd.DataFrame):
+            raise ValueError("social_data must be a pandas DataFrame.")
+
         directed = issubclass(self.graph_type, (nx.DiGraph, nx.MultiDiGraph))
         include_all = self.multi
 
         if directed:
+            logger.debug("Graph is directed. Computing velocities...")
             position_data = compute_velocities(position_data)
+            # Ensure columns use vel_x / vel_y instead of old velX / velY
+            position_data.rename(columns={"velX": "vel_x", "velY": "vel_y"}, inplace=True)
 
+        logger.debug("Computing interaction edges...")
         edge_list = count_interactions(
             position_data,
             proximity=proximity,
@@ -155,8 +175,10 @@ class GraphSDMiningBase(object):
             include_all_pairs=include_all
         )
 
+        logger.debug(f"Creating graph from {len(edge_list)} edges...")
         self._create_graph(edge_list)
-        self.social_data = social_data
+        self.social_data = social_data.copy()
+        logger.info("Graph construction complete.")
 
     @staticmethod
     def _evaluate_quality(args):
@@ -171,60 +193,63 @@ class GraphSDMiningBase(object):
             quality_measure: str = "relative_density"
     ) -> List[Pattern]:
         """
-        Discovers high-quality subgroups based on frequent patterns and interaction quality.
+        Discovers high-quality subgroups based on frequent patterns and edge-level attributes.
 
-        Parameters:
-            mode (str): Strategy for extracting attribute transactions ('comparison', 'composition', etc.)
-            min_support (float): Minimum frequency threshold (0 < s ≤ 1).
-            metric (str): Target metric to evaluate subgraphs ('mean', 'var', etc.)
-            quality_measure (str): Quality function to use ('relative_density', 'global_proportion', etc.)
+        Args:
+            mode (str): Strategy for extracting transactions ('comparison', 'to', 'from', etc.).
+            min_support (float): Minimum support threshold (between 0 and 1).
+            metric (str): Metric to evaluate on ('mean', 'var', etc.).
+            quality_measure (str): Pattern quality function ('relative_density', 'qP', etc.).
 
         Returns:
-            List[Pattern]: Sorted list of patterns ranked by quality.
+            List[Pattern]: Patterns ranked by quality score.
         """
+        if not (0 < min_support <= 1):
+            raise ValueError("min_support must be in (0, 1].")
+
+        logger.info(
+            f"Starting subgroup discovery with mode='{mode}', min_support={min_support}, metric='{metric}', quality='{quality_measure}'")
+
         self.npr.seed(self.random_state)
 
+        logger.debug("Annotating graph edges with social attributes...")
         self.annotate_edges(mode=mode)
-        transactions = self.extract_transactions()
-        itemsets = self.get_frequent_items(transactions, min_support)
 
+        logger.debug("Extracting transactions from graph...")
+        transactions = self.extract_transactions()
+
+        logger.debug("Finding frequent itemsets...")
+        itemsets = self.get_frequent_items(transactions, min_support)
         if not itemsets:
+            logger.warning("No frequent itemsets found. Returning empty list.")
             return []
 
+        logger.debug(f"Scoring {len(itemsets)} itemsets with '{quality_measure}'...")
         if self.n_jobs > 1:
             results = Parallel(n_jobs=self.n_jobs)(
-                delayed(self.quality_measure_base)(itemset, metric, quality_measure)
-                for itemset in itemsets
+                delayed(self.quality_measure_base)(itemset, metric, quality_measure) for itemset in itemsets
             )
         else:
             results = [self.quality_measure_base(itemset, metric, quality_measure) for itemset in itemsets]
 
-        return sorted(results, key=lambda p: p.quality, reverse=True)
+        sorted_results = sorted(results, key=lambda p: p.quality, reverse=True)
+        logger.info(f"Finished subgroup discovery. Returned {len(sorted_results)} patterns.")
+        return sorted_results
 
-    def extract_edge_keys(
-            self,
-            edges_with_data: List[Tuple]
-    ) -> List[Tuple]:
+    def extract_edge_keys(self, edges_with_data: List[Tuple]) -> List[Tuple]:
         """
-        Extracts edge identifiers from edge tuples that include data dictionaries,
-        returning keys suitable for use with NetworkX's edge_subgraph() method.
+        Extract edge keys (u, v) or (u, v, k) from edge tuples with data.
 
-        This method supports both standard and multi-edge graph types.
-
-        Parameters:
-            edges_with_data (List[Tuple]): A list of edge tuples that include attributes.
-                - For standard graphs: (u, v, data)
-                - For multi-edge graphs: (u, v, key, data)
+        Args:
+            edges_with_data (List[Tuple]): Edge tuples from the graph.
 
         Returns:
-            List[Tuple]: A list of edge identifiers:
-                - (u, v) for Graph / DiGraph
-                - (u, v, key) for MultiGraph / MultiDiGraph
+            List[Tuple]: Keys for edge_subgraph.
         """
-        if self.multi:
-            return [(u, v, k) for u, v, k, _ in edges_with_data]
-        else:
-            return [(u, v) for u, v, _ in edges_with_data]
+        idx = 3 if self.multi else 2
+        keys = [edge[:idx] for edge in edges_with_data]
+        logger.debug(f"Extracted {len(keys)} edge keys from {len(edges_with_data)} input edges.")
+        return keys
 
     def quality_measure_base(
             self,
@@ -233,48 +258,50 @@ class GraphSDMiningBase(object):
             measure_type: str = "relative_density"
     ) -> Pattern:
         """
-        Computes the normalized quality score of a pattern's induced subgraph.
+        Computes the quality of a pattern's induced subgraph.
 
-        Parameters:
+        Args:
             pattern (Tuple[NominalSelector, ...]): Attribute-value selectors defining the pattern.
-            metric (str): Evaluation metric ('mean', 'var', etc.).
-            measure_type (str): Quality scoring strategy.
-                Supported:
-                    - 'relative_density' (qS): based on structural potential of the pattern subgraph
-                    - 'global_proportion' (qP): based on total graph edge mass
+            metric (str): Metric to apply over the induced subgraph (e.g., 'mean').
+            measure_type (str): One of 'relative_density' or 'global_proportion'.
 
         Returns:
-            Pattern: A Pattern object with the subgraph and its computed quality score.
+            Pattern: A Pattern instance with computed weight and quality.
         """
+        if not isinstance(pattern, tuple):
+            raise TypeError("Pattern must be a tuple of NominalSelectors.")
+
+        logger.debug(f"Scoring pattern: {pattern} with metric='{metric}', measure='{measure_type}'")
+
         raw_edges = self.get_edges_in_pattern(pattern)
         edges = self.extract_edge_keys(raw_edges)
-        graph_of_pattern = self.graph.edge_subgraph(edges).copy()
+        G_sub = self.graph.edge_subgraph(edges).copy()
 
-        # Normalize shorthand identifiers
-        measure_type = self.QUALITY_MEASURES.get(measure_type, None)
-        if measure_type is None:
-            raise ValueError(
-                "Unsupported quality measure. Use one of: "
-                f"{list(self.QUALITY_MEASURES.keys())}"
-            )
+        measure_mode = self.QUALITY_MEASURES.get(measure_type)
+        if measure_mode is None:
+            raise ValueError(f"Unsupported quality measure '{measure_type}'. "
+                             f"Choose from {list(self.QUALITY_MEASURES.keys())}")
 
-        if measure_type == 'relative_density':
-            n_nodes = graph_of_pattern.number_of_nodes()
-            max_pattern_edges = float(n_nodes * (n_nodes - 1))
-        elif measure_type == 'global_proportion':
-            max_pattern_edges = None
+        max_edges = None
+        if measure_mode == "relative_density":
+            n = G_sub.number_of_nodes()
+            max_edges = float(n * (n - 1))  # assuming directed
+            logger.debug(f"Relative density: max_edges = {max_edges}")
+        elif measure_mode == "global_proportion":
+            logger.debug("Global proportion: using total graph mass as denominator")
 
-        score = self.measure_score(graph_of_pattern, metric, max_pattern_edges)
-        subgroup = Pattern(pattern, graph_of_pattern, score)
+        score = self.measure_score(G_sub, metric, max_edges)
+        subgroup = Pattern(pattern, G_sub, score)
 
         mean, std = self.statistical_validation(
             n_samples=self.n_samples,
-            pattern_size=graph_of_pattern.number_of_edges(),
+            pattern_size=G_sub.number_of_edges(),
             metric=metric,
-            max_pattern_edges=max_pattern_edges
+            max_pattern_edges=max_edges
         )
 
         subgroup.quality = (subgroup.weight - mean) / std if std > 0 else 0.0
+        logger.debug(f"Pattern score: {subgroup.weight:.3f}, normalized quality: {subgroup.quality:.3f}")
 
         return subgroup
 
@@ -286,35 +313,41 @@ class GraphSDMiningBase(object):
             max_pattern_edges: float
     ) -> Tuple[float, float]:
         """
-        Estimates the mean and standard deviation of a quality score under the null hypothesis,
-        by sampling random subgraphs with a fixed number of edges.
+        Estimate the expected quality score and its variance under the null model by
+        sampling subgraphs with a fixed number of edges.
 
-        Parameters:
-            n_samples (int): Number of random subgraphs to sample.
+        Args:
+            n_samples (int): Number of samples to draw.
             pattern_size (int): Number of edges in each sampled subgraph.
-            metric (str): Quality metric to compute ('mean', 'var').
-            max_pattern_edges (float): Normalization constant based on the pattern's node set.
+            metric (str): Metric to evaluate ('mean', 'var').
+            max_pattern_edges (float): Normalization factor for scoring.
 
         Returns:
-            Tuple[float, float]: Mean and standard deviation of quality scores from sampled subgraphs.
+            Tuple[float, float]: (mean score, std deviation score)
         """
-        list_of_edges = list(self.graph.edges(keys=True) if self.multi else self.graph.edges())
-        graph_size = len(list_of_edges)
+        if pattern_size <= 0 or n_samples <= 0:
+            return 0.0, 0.0
 
-        def sample_and_score() -> float:
-            if graph_size < pattern_size:
-                return 0.0
+        edge_list = list(self.graph.edges(keys=True) if self.multi else self.graph.edges())
+        total_edges = len(edge_list)
 
-            indices = self.npr.choice(graph_size, size=pattern_size, replace=False)
-            sampled_edges = [list_of_edges[i] for i in indices]
-            subgraph = self.graph.edge_subgraph(sampled_edges)
+        if total_edges < pattern_size:
+            logger.warning("Pattern size exceeds total number of edges. Returning zero stats.")
+            return 0.0, 0.0
+
+        def sample_score() -> float:
+            sampled = self.npr.choice(total_edges, size=pattern_size, replace=False)
+            sub_edges = [edge_list[i] for i in sampled]
+            subgraph = self.graph.edge_subgraph(sub_edges)
             return self.measure_score(subgraph, metric, max_pattern_edges)
+
+        logger.debug(f"Sampling {n_samples} subgraphs of {pattern_size} edges each...")
 
         scores = (
             Parallel(n_jobs=self.n_jobs)(
-                delayed(sample_and_score)() for _ in range(n_samples)
+                delayed(sample_score)() for _ in range(n_samples)
             ) if self.n_jobs > 1 else
-            [sample_and_score() for _ in range(n_samples)]
+            [sample_score() for _ in range(n_samples)]
         )
 
         return float(np.mean(scores)), float(np.std(scores))
@@ -326,182 +359,185 @@ class GraphSDMiningBase(object):
             max_pattern_edges: Optional[float] = None
     ) -> float:
         """
-        Computes a normalized quality score for a given subgraph using the specified metric.
+        Compute a normalized score for a pattern's subgraph using the specified metric.
 
-        Parameters:
-            graph_of_pattern (nx.Graph): The subgraph induced by a pattern.
-            metric (str): The scoring metric to use ('mean' or 'var').
-            max_pattern_edges (float, optional): Maximum number of edges for normalization.
-                Defaults to the current subgraph size.
+        Args:
+            graph_of_pattern (nx.Graph): The induced subgraph of the pattern.
+            metric (str): Scoring metric ('mean' or 'var').
+            max_pattern_edges (float, optional): Normalization factor for edge-based metrics.
+                If None, defaults to actual edge count.
 
         Returns:
-            float: The computed quality score (e.g., mean weight density or normalized variance).
+            float: The normalized quality score.
         """
-        if max_pattern_edges is None:
-            max_pattern_edges = graph_of_pattern.size()
+        if graph_of_pattern.number_of_edges() == 0:
+            return 0.0
 
+        if max_pattern_edges is None:
+            max_pattern_edges = graph_of_pattern.number_of_edges()
         if max_pattern_edges == 0:
             return 0.0
 
-        total_weight = graph_of_pattern.size(weight="weight")
-        mean_weight = total_weight / max_pattern_edges
+        weights = [d.get("weight", 0.0) for _, _, d in graph_of_pattern.edges(data=True)]
 
-        if metric == 'mean':
-            return mean_weight
+        if metric == "mean":
+            return sum(weights) / max_pattern_edges
 
-        elif metric == 'var':
-            weights = [d.get('weight', 0.0) for _, _, d in graph_of_pattern.edges(data=True)]
-            variance = np.var(weights) / max_pattern_edges
-            return variance
+        if metric == "var":
+            return np.var(weights) / max_pattern_edges
 
-        else:
-            raise ValueError(f"Unsupported metric: {metric}")
+        raise ValueError(f"Unsupported metric: '{metric}'. Choose 'mean' or 'var'.")
 
-    def get_edges_in_pattern(
-            self,
-            pattern: Tuple[NominalSelector, ...]
-    ) -> List[Union[
-        Tuple[int, int, dict],  # For Graph / DiGraph
-        Tuple[int, int, int, dict]  # For MultiGraph / MultiDiGraph
-    ]]:
+    def get_edges_in_pattern(self, pattern: Tuple[NominalSelector, ...]) -> list:
         """
-        Extracts edges from the main graph that satisfy all attribute-value selectors in the pattern.
+        Return all edges that match all attribute-value selectors in the pattern.
 
-        Parameters:
-            pattern (Tuple[NominalSelector, ...]): Selectors defining the edge pattern to match.
+        Args:
+            pattern (Tuple[NominalSelector, ...]): The selectors to match.
 
         Returns:
-            List[Tuple]: A list of edges (u, v, data) or (u, v, key, data), depending on graph type.
+            list: Matching edges.
         """
-        if self.multi:
-            edge_iter = self.graph.edges(keys=True, data=True)
-        else:
-            edge_iter = self.graph.edges(data=True)
+        if not isinstance(pattern, tuple):
+            raise TypeError("Pattern must be a tuple of NominalSelectors.")
 
-        matching_edges = []
+        selector_map = {sel.attribute: sel.value for sel in pattern}
+        edge_iter = self.graph.edges(keys=True, data=True) if self.multi else self.graph.edges(data=True)
 
-        for edge in edge_iter:
-            data = edge[-1]  # data dict is always the last element
-            if all(data.get(sel.attribute) == sel.value for sel in pattern):
-                matching_edges.append(edge)
+        matches = [
+            edge for edge in edge_iter
+            if all(edge[-1].get(attr) == val for attr, val in selector_map.items())
+        ]
 
-        return matching_edges
+        logger.debug(f"Pattern {pattern} matched {len(matches)} edges.")
+        return matches
 
     def extract_transactions(self) -> List[List[NominalSelector]]:
         """
-        Extracts transactions (attribute-value itemsets) from annotated edges in the graph.
+        Extract transactions from annotated edges.
+
+        Each transaction is a list of NominalSelectors, one per attribute,
+        representing the attribute values attached to an edge.
 
         Returns:
-            List[List[NominalSelector]]: One transaction per edge, based on its annotated attributes.
+            List[List[NominalSelector]]: One transaction per edge.
         """
-        attributes = self.social_data.drop(columns=["id"]).columns
+        if not hasattr(self, "_edge_attributes"):
+            raise RuntimeError("Edge attributes not initialized. Run annotate_edges() first.")
+
+        attributes = self._edge_attributes
         transactions = []
 
-        edges = (
+        edge_iter = (
             self.graph.edges(keys=True, data=True)
             if self.multi else self.graph.edges(data=True)
         )
 
-        for edge in edges:
+        for edge in edge_iter:
             edict = edge[-1]
-            tr = [NominalSelector(att, edict[att]) for att in attributes]
-            transactions.append(tr)
+            try:
+                transaction = [NominalSelector(att, edict[att]) for att in attributes]
+                transactions.append(transaction)
+            except KeyError as e:
+                logger.debug(f"Skipping edge {edge[:2]} due to missing attribute: {e}")
 
+        logger.info(f"Extracted {len(transactions)} transactions from {self.graph.number_of_edges()} edges.")
         return transactions
 
     def annotate_edges(self, mode: str = "comparison") -> None:
         """
-        Annotates each edge in the graph with attributes derived from node-level social data.
+        Annotate graph edges with social attributes from node-level data.
 
-        Parameters:
-            mode (str): Strategy for encoding node attributes on edges.
-                - "to": takes attributes from the target node (only for directed graphs)
-                - "from": takes attributes from the source node (only for directed graphs)
-                - "comparison": encodes the relationship between source and target attributes
-
-        Raises:
-            ValueError: If mode is invalid for the graph type.
+        Args:
+            mode (str): 'to', 'from', or 'comparison'.
         """
+        if mode not in {"to", "from", "comparison"}:
+            raise ValueError("mode must be one of: 'to', 'from', 'comparison'.")
+
         if not self.directed and mode in {"to", "from"}:
-            # No direction in undirected graphs — fall back to symmetric comparison
-            print(f"[INFO] Mode '{mode}' is not applicable to undirected graphs — falling back to 'comparison'.")
+            logger.warning(f"Mode '{mode}' is invalid for undirected graphs. Using 'comparison' instead.")
             mode = "comparison"
 
-        attributes = self.social_data.drop(columns=["id"]).columns
+        if "id" not in self.social_data.columns:
+            raise ValueError("social_data must contain an 'id' column.")
 
-        edges = (
-            self.graph.edges(keys=True, data=True)
-            if self.multi else self.graph.edges(data=True)
+        attributes = [col for col in self.social_data.columns if col != "id"]
+
+        # Use flat lookup: {attribute: {node_id: value}}
+        attr_lookup = {
+            att: self.social_data.set_index("id")[att].to_dict()
+            for att in attributes
+        }
+
+        edge_iter = (
+            self.graph.edges(keys=True, data=True) if self.multi
+            else self.graph.edges(data=True)
         )
 
-        for edge in edges:
+        for edge in edge_iter:
             u, v = edge[:2]
             edict = edge[-1]
 
             for att in attributes:
-                val_u = self.social_data[self.social_data.id == u][att].item()
-                val_v = self.social_data[self.social_data.id == v][att].item()
+                val_u = attr_lookup[att].get(u)
+                val_v = attr_lookup[att].get(v)
 
-                if mode == "to":
-                    val = val_v
-                elif mode == "from":
-                    val = val_u
-                elif mode == "comparison":
-                    if isinstance(val_u, str):
-                        val = str((val_u, val_v))
-                    elif val_u == val_v:
-                        val = "EQ"
-                    elif val_u > val_v:
-                        val = ">"
-                    else:
-                        val = "<"
-                else:
-                    raise ValueError("Invalid mode. Use one of: 'to', 'from', 'comparison'.")
+                if val_u is None or val_v is None:
+                    logger.debug(f"Skipping edge ({u}, {v}): missing value for '{att}'")
+                    continue
 
-                edict[att] = val
+                edict[att] = self._resolve_edge_value(val_u, val_v, mode)
+
+        self._edge_attributes = attributes
+
+    @staticmethod
+    def _resolve_edge_value(val_u: Any, val_v: Any, mode: str) -> Any:
+        """Resolve the attribute value to assign to an edge based on mode."""
+        if mode == "to":
+            return val_v
+        if mode == "from":
+            return val_u
+        if isinstance(val_u, str) or isinstance(val_v, str):
+            return str((val_u, val_v))
+        if val_u == val_v:
+            return "EQ"
+        return ">" if val_u > val_v else "<"
 
     @staticmethod
     def to_dataframe(subgroups: List[Pattern]) -> pd.DataFrame:
         """
-        Summarizes a list of Pattern objects into a DataFrame.
+        Convert a list of Pattern objects into a summary DataFrame.
 
         Args:
-            subgroups (List[Pattern]): Patterns to summarize.
+            subgroups (List[Pattern]): The discovered patterns.
 
         Returns:
-            pd.DataFrame: Summary table.
+            pd.DataFrame: Summary of each pattern's structure and quality.
         """
-        col_names = ['Pattern', 'Nodes', 'In Degree > 0', 'Out Degree > 0', 'Edges', 'Mean Weight', 'Score']
-        dataframe = pd.DataFrame(columns=col_names)
-
+        rows = []
         for p in subgroups:
             if not isinstance(p, Pattern):
                 continue
-
             G = p.graph
 
-            if hasattr(G, 'in_degree') and hasattr(G, 'out_degree'):
-                # Directed or multi-directed
-                in_nodes = sum(1 for _, deg in G.in_degree() if deg > 0)
-                out_nodes = sum(1 for _, deg in G.out_degree() if deg > 0)
+            if hasattr(G, "in_degree") and hasattr(G, "out_degree"):
+                in_nodes = sum(1 for _, d in G.in_degree() if d > 0)
+                out_nodes = sum(1 for _, d in G.out_degree() if d > 0)
             else:
-                # Undirected fallback
-                in_nodes = out_nodes = sum(1 for _, deg in G.degree() if deg > 0)
+                degree_counts = [deg for _, deg in G.degree()]
+                in_nodes = out_nodes = sum(1 for d in degree_counts if d > 0)
 
-            dataframe = pd.concat([
-                dataframe,
-                pd.DataFrame([{
-                    'Pattern': p.name,
-                    'Nodes': G.number_of_nodes(),
-                    'In Degree > 0': in_nodes,
-                    'Out Degree > 0': out_nodes,
-                    'Edges': G.number_of_edges(),
-                    'Mean Weight': round(p.weight, 1),
-                    'Score': round(p.quality, 1)
-                }])
-            ], ignore_index=True)
+            rows.append({
+                "Pattern": p.name,
+                "Nodes": G.number_of_nodes(),
+                "In Degree > 0": in_nodes,
+                "Out Degree > 0": out_nodes,
+                "Edges": G.number_of_edges(),
+                "Mean Weight": round(p.weight, 1),
+                "Score": round(p.quality, 1)
+            })
 
-        return dataframe
+        return pd.DataFrame(rows)
 
 
 class DigraphSDMining(GraphSDMiningBase):
