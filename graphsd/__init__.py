@@ -9,7 +9,7 @@ from importlib.metadata import version as _version
 from .patterns import Pattern, PatternWithoutGraph, NominalSelector
 from .mining import GraphSDMining, DigraphSDMining, MultiDigraphSDMining
 from .viz import graph_viz
-#from .outlier import OutlierDetector
+from .outlier import OutlierSDMining
 
 __version__ = _version("graph-sd")
 get_version = lambda: __version__
